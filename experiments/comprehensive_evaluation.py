@@ -44,28 +44,40 @@ class ComprehensiveTSBoosterExperiment:
     """
     完整的 TS-Booster 評估實驗
     """
-    def __init__(self, output_dir="experiments/comprehensive_results", clean_old_results=True):
+    def __init__(self, output_dir="experiments/comprehensive_results"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 清理舊結果
-        if clean_old_results:
-            self._clean_old_results()
-        
+
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"🔧 Device: {self.device}")
-        
+
         self.results = {}
-    
-    def _clean_old_results(self):
-        """清理舊的實驗結果檔案"""
-        patterns = [
-            'ablation_results_*.json',
-            'ablation_report_*.md',
-            'cross_backbone_results_*.json',
-            'cross_backbone_report_*.md'
-        ]
-        
+
+    def _clean_old_results(self, currency_pair=None):
+        """清理舊的實驗結果檔案
+
+        Args:
+            currency_pair: 如果指定，只清除該幣別的結果；如果為 None，清除所有結果
+        """
+        if currency_pair:
+            # 只清除特定幣別的結果
+            patterns = [
+                f'ablation_results_{currency_pair}_*.json',
+                f'ablation_report_{currency_pair}_*.md',
+                f'cross_backbone_results_{currency_pair}_*.json',
+                f'cross_backbone_report_{currency_pair}_*.md'
+            ]
+            print(f"🧹 Cleaning old results for {currency_pair}...")
+        else:
+            # 清除所有結果
+            patterns = [
+                'ablation_results_*.json',
+                'ablation_report_*.md',
+                'cross_backbone_results_*.json',
+                'cross_backbone_report_*.md'
+            ]
+            print(f"🧹 Cleaning all old results...")
+
         cleaned_count = 0
         for pattern in patterns:
             files = glob.glob(str(self.output_dir / pattern))
@@ -75,20 +87,33 @@ class ComprehensiveTSBoosterExperiment:
                     cleaned_count += 1
                 except Exception as e:
                     print(f"⚠️  Warning: Could not delete {file}: {e}")
-        
+
         if cleaned_count > 0:
             print(f"🧹 Cleaned {cleaned_count} old result files")
         
-    def run_ablation_study(self, dataset_path='dataset/USD_TWD.csv', epochs=100, quick_test=False):
+    def run_ablation_study(self, dataset_path='dataset/USD_TWD.csv', epochs=100, quick_test=False, clean_old_results=True):
         """
         Ablation Study: 測試每個組件的貢獻
+
+        Args:
+            dataset_path: 資料集路徑
+            epochs: 訓練回合數
+            quick_test: 是否為快速測試模式
+            clean_old_results: 是否清除該幣別的舊結果
         """
+        # Extract currency pair from dataset path
+        currency_pair = Path(dataset_path).stem  # e.g., 'USD_TWD'
+
+        # Clean old results for this currency pair
+        if clean_old_results:
+            self._clean_old_results(currency_pair)
+
         if quick_test:
             epochs = 20
             print("⚡ Quick Test Mode: epochs reduced to 20")
-        
+
         print("\n" + "="*80)
-        print("🔬 Ablation Study: Component Contribution Analysis")
+        print(f"🔬 Ablation Study: Component Contribution Analysis ({currency_pair})")
         print("="*80 + "\n")
         
         # Load data
@@ -112,6 +137,7 @@ class ComprehensiveTSBoosterExperiment:
                 'use_experts': False,
                 'use_gating': False,
                 'use_dnas': False,
+                'use_multiscale_decomp': False,
                 'description': 'Pure Backbone (Baseline)'
             },
             {
@@ -120,6 +146,7 @@ class ComprehensiveTSBoosterExperiment:
                 'use_experts': False,
                 'use_gating': False,
                 'use_dnas': False,
+                'use_multiscale_decomp': False,
                 'description': 'Backbone + Fixed Decomposition'
             },
             {
@@ -128,23 +155,35 @@ class ComprehensiveTSBoosterExperiment:
                 'use_experts': True,
                 'use_gating': False,
                 'use_dnas': False,
-                'description': 'Backbone + Decomp + Fixed CNN Experts'
+                'use_multiscale_decomp': False,
+                'description': 'Backbone + Decomp + Experts (gate=1)'
             },
             {
-                'name': '+Gating',
+                'name': '+MultiScale',
+                'use_decomp': True,
+                'use_experts': False,
+                'use_gating': False,
+                'use_dnas': False,
+                'use_multiscale_decomp': True,
+                'description': 'Multi-Scale Decomp (Global Weights)'
+            },
+            {
+                'name': '+MultiScale+Experts',
                 'use_decomp': True,
                 'use_experts': True,
-                'use_gating': True,
+                'use_gating': False,
                 'use_dnas': False,
-                'description': 'Backbone + Decomp + Experts + Adaptive Gating'
+                'use_multiscale_decomp': True,
+                'description': 'Multi-Scale Decomp + Experts'
             },
             {
                 'name': 'Full (DNAS)',
                 'use_decomp': True,
                 'use_experts': True,
-                'use_gating': True,
+                'use_gating': False,
                 'use_dnas': True,
-                'description': 'Full TS_Booster with DNAS'
+                'use_multiscale_decomp': False,
+                'description': 'DNAS Decomp + Experts (gate=1)'
             }
         ]
         
@@ -173,7 +212,9 @@ class ComprehensiveTSBoosterExperiment:
                     use_experts=exp_config['use_experts'],
                     use_gating=exp_config['use_gating'],
                     use_dnas=exp_config['use_dnas'],
+                    use_multiscale_decomp=exp_config.get('use_multiscale_decomp', False),
                     fixed_decomp_kernel=25,
+                    multiscale_kernels=[7, 13, 25, 49],
                     fixed_trend_kernel=5,
                     fixed_seasonal_kernel=5,
                     trend_dnas_kernels=config.get('trend_dnas_kernels', [3, 5, 7, 9]),
@@ -197,30 +238,48 @@ class ComprehensiveTSBoosterExperiment:
             # Extract DNAS status if available
             if exp_config['use_dnas'] and hasattr(trained_model, 'get_dnas_status'):
                 metrics['dnas_status'] = trained_model.get_dnas_status()
-            
+
+            # Extract MultiScaleDecomp weights if available
+            if exp_config.get('use_multiscale_decomp', False) and hasattr(trained_model, 'decomp'):
+                if hasattr(trained_model.decomp, 'get_weights_status'):
+                    metrics['multiscale_weights'] = trained_model.decomp.get_weights_status()
+
             ablation_results[exp_config['name']] = metrics
             
             print(f"\n✅ {exp_config['name']} Complete!")
             print(f"   RMSE: {metrics['RMSE']:.4f} | MAE: {metrics['MAE']:.4f} | R2: {metrics['R2']:.4f}")
         
         self.results['ablation'] = ablation_results
-        
+
         # Save results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self._save_ablation_results(ablation_results, timestamp)
-        
+        self._save_ablation_results(ablation_results, currency_pair, timestamp)
+
         return ablation_results
     
-    def run_cross_backbone_validation(self, dataset_path='dataset/USD_TWD.csv', epochs=100, quick_test=False):
+    def run_cross_backbone_validation(self, dataset_path='dataset/USD_TWD.csv', epochs=100, quick_test=False, clean_old_results=True):
         """
         Cross-Backbone Validation: 測試 TS_Booster 對不同 Backbone 的提升效果
+
+        Args:
+            dataset_path: 資料集路徑
+            epochs: 訓練回合數
+            quick_test: 是否為快速測試模式
+            clean_old_results: 是否清除該幣別的舊結果
         """
+        # Extract currency pair from dataset path
+        currency_pair = Path(dataset_path).stem  # e.g., 'USD_TWD'
+
+        # Clean old results for this currency pair
+        if clean_old_results:
+            self._clean_old_results(currency_pair)
+
         if quick_test:
             epochs = 20
             print("⚡ Quick Test Mode: epochs reduced to 20")
-        
+
         print("\n" + "="*80)
-        print("🔄 Cross-Backbone Validation")
+        print(f"🔄 Cross-Backbone Validation ({currency_pair})")
         print("="*80 + "\n")
         
         # Load data
@@ -302,11 +361,11 @@ class ComprehensiveTSBoosterExperiment:
             print(f"   Improvement: {improvement:+.2f}%")
         
         self.results['cross_backbone'] = cross_backbone_results
-        
+
         # Save results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self._save_cross_backbone_results(cross_backbone_results, timestamp)
-        
+        self._save_cross_backbone_results(cross_backbone_results, currency_pair, timestamp)
+
         return cross_backbone_results
     
     def _evaluate_model(self, model, test_loader, scaler, model_name):
@@ -361,51 +420,87 @@ class ComprehensiveTSBoosterExperiment:
             'model_name': model_name
         }
     
-    def _save_ablation_results(self, results, timestamp):
-        """儲存 Ablation 結果"""
-        # JSON
-        json_file = self.output_dir / f"ablation_results_{timestamp}.json"
+    def _save_ablation_results(self, results, currency_pair, timestamp):
+        """儲存 Ablation 結果
+
+        Args:
+            results: 實驗結果字典
+            currency_pair: 幣別名稱 (e.g., 'USD_TWD')
+            timestamp: 時間戳記
+        """
+        # Add metadata to results
+        results_with_metadata = {
+            'metadata': {
+                'currency_pair': currency_pair,
+                'timestamp': timestamp,
+                'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            },
+            'results': results
+        }
+
+        # JSON (with currency pair in filename)
+        json_file = self.output_dir / f"ablation_results_{currency_pair}_{timestamp}.json"
         with open(json_file, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
-        
-        # Markdown Report
-        md_file = self.output_dir / f"ablation_report_{timestamp}.md"
+            json.dump(results_with_metadata, f, indent=2, default=str)
+
+        # Markdown Report (with currency pair in filename)
+        md_file = self.output_dir / f"ablation_report_{currency_pair}_{timestamp}.md"
         with open(md_file, 'w') as f:
-            f.write("# Ablation Study Results\n\n")
+            f.write(f"# Ablation Study Results - {currency_pair}\n\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            
+
             f.write("## Summary Table\n\n")
             f.write("| Configuration | RMSE | MAE | R2 | MDA | Description |\n")
             f.write("|---------------|------|-----|----|----|-------------|\n")
-            
+
             for name, metrics in results.items():
                 f.write(f"| {name} | {metrics['RMSE']:.4f} | {metrics['MAE']:.4f} | "
                        f"{metrics['R2']:.4f} | {metrics['MDA']:.2f}% | - |\n")
-        
+
         print(f"\n💾 Ablation results saved to {self.output_dir}")
+        print(f"   📄 JSON: {json_file.name}")
+        print(f"   📄 Report: {md_file.name}")
     
-    def _save_cross_backbone_results(self, results, timestamp):
-        """儲存 Cross-Backbone 結果"""
-        # JSON
-        json_file = self.output_dir / f"cross_backbone_results_{timestamp}.json"
+    def _save_cross_backbone_results(self, results, currency_pair, timestamp):
+        """儲存 Cross-Backbone 結果
+
+        Args:
+            results: 實驗結果字典
+            currency_pair: 幣別名稱 (e.g., 'USD_TWD')
+            timestamp: 時間戳記
+        """
+        # Add metadata to results
+        results_with_metadata = {
+            'metadata': {
+                'currency_pair': currency_pair,
+                'timestamp': timestamp,
+                'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            },
+            'results': results
+        }
+
+        # JSON (with currency pair in filename)
+        json_file = self.output_dir / f"cross_backbone_results_{currency_pair}_{timestamp}.json"
         with open(json_file, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
-        
-        # Markdown Report
-        md_file = self.output_dir / f"cross_backbone_report_{timestamp}.md"
+            json.dump(results_with_metadata, f, indent=2, default=str)
+
+        # Markdown Report (with currency pair in filename)
+        md_file = self.output_dir / f"cross_backbone_report_{currency_pair}_{timestamp}.md"
         with open(md_file, 'w') as f:
-            f.write("# Cross-Backbone Validation Results\n\n")
+            f.write(f"# Cross-Backbone Validation Results - {currency_pair}\n\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            
+
             f.write("## Summary Table\n\n")
             f.write("| Backbone | Vanilla RMSE | Boosted RMSE | Improvement |\n")
             f.write("|----------|--------------|--------------|-------------|\n")
-            
+
             for backbone, data in results.items():
                 f.write(f"| {backbone} | {data['vanilla']['RMSE']:.4f} | "
                        f"{data['boosted']['RMSE']:.4f} | {data['improvement']:+.2f}% |\n")
-        
+
         print(f"\n💾 Cross-backbone results saved to {self.output_dir}")
+        print(f"   📄 JSON: {json_file.name}")
+        print(f"   📄 Report: {md_file.name}")
 
 
 def main():
@@ -427,23 +522,30 @@ def main():
     print("\n" + "="*80)
     print("🚀 Comprehensive TS-Booster Evaluation")
     print("="*80 + "\n")
-    
-    experiment = ComprehensiveTSBoosterExperiment(clean_old_results=not args.keep_old)
-    
+
+    experiment = ComprehensiveTSBoosterExperiment()
+
+    # When running 'all', only clean at the beginning to avoid deleting ablation results
+    # when cross-backbone starts
+    clean_for_ablation = not args.keep_old
+    clean_for_crossbackbone = not args.keep_old if args.experiment == 'cross-backbone' else False
+
     if args.experiment in ['ablation', 'all']:
         print("\n🔬 Running Ablation Study...")
         experiment.run_ablation_study(
             dataset_path=args.dataset,
             epochs=args.epochs,
-            quick_test=args.quick
+            quick_test=args.quick,
+            clean_old_results=clean_for_ablation
         )
-    
+
     if args.experiment in ['cross-backbone', 'all']:
         print("\n🔄 Running Cross-Backbone Validation...")
         experiment.run_cross_backbone_validation(
             dataset_path=args.dataset,
             epochs=args.epochs,
-            quick_test=args.quick
+            quick_test=args.quick,
+            clean_old_results=clean_for_crossbackbone
         )
     
     print("\n" + "="*80)

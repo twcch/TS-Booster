@@ -26,8 +26,11 @@ class ComprehensiveResultsVisualizer:
     def visualize_ablation(self, json_file):
         """視覺化 Ablation Study 結果"""
         with open(json_file, 'r') as f:
-            results = json.load(f)
-        
+            data = json.load(f)
+
+        # Handle new format with metadata
+        results = data.get('results', data)
+
         # 1. RMSE Progression
         self._plot_ablation_progression(results)
         
@@ -42,8 +45,11 @@ class ComprehensiveResultsVisualizer:
     def visualize_cross_backbone(self, json_file):
         """視覺化 Cross-Backbone 結果"""
         with open(json_file, 'r') as f:
-            results = json.load(f)
-        
+            data = json.load(f)
+
+        # Handle new format with metadata
+        results = data.get('results', data)
+
         # 1. Backbone Comparison
         self._plot_backbone_comparison(results)
         

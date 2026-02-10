@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 import tempfile
 import os
 
@@ -97,8 +98,9 @@ def train_v11(
         print("\n")
     for epoch in range(active_epochs):
         # === DNAS & Gating Scheduler ===
-        dnas_warmup_epochs = config.get('dnas_warmup_epochs', 0)
-        
+        # P1 fix: default warmup = 20% of total epochs
+        dnas_warmup_epochs = config.get('dnas_warmup_epochs', max(1, active_epochs // 5))
+
         # Check if model supports DNAS toggling
         if hasattr(model, 'toggle_dnas_mode') and hasattr(model, 'set_gating_status'):
             if epoch < dnas_warmup_epochs:
@@ -106,9 +108,27 @@ def train_v11(
                 model.toggle_dnas_mode("warmup")
                 model.set_gating_status(fixed=True)
             else:
-                if epoch == dnas_warmup_epochs and verbose: print(f"  [Scheduler] Search Mode: DNAS Active, Gates Adaptive (Epoch {dnas_warmup_epochs}+)")
+                if epoch == dnas_warmup_epochs:
+                    if verbose: print(f"  [Scheduler] Search Mode: DNAS Active, Gates Adaptive (Epoch {dnas_warmup_epochs}+)")
+                    # Reset early stopping + LR so search gets a fair chance
+                    counter = 0
+                    for pg in optimizer.param_groups:
+                        pg['lr'] = active_lr
+                    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                        optimizer, mode="min", factor=0.5, patience=10, threshold=0.001, min_lr=1e-5
+                    )
+                    if verbose: print(f"  [LR Reset] LR restored to {active_lr}, scheduler patience=10")
                 model.toggle_dnas_mode("search")
                 model.set_gating_status(fixed=False)
+
+                # P0 fix: Tau annealing during search phase
+                if hasattr(model, 'set_tau'):
+                    search_epochs = active_epochs - dnas_warmup_epochs
+                    search_progress = (epoch - dnas_warmup_epochs) / max(1, search_epochs - 1)
+                    tau = max(0.1, 1.0 - search_progress * 0.9)
+                    model.set_tau(tau)
+                    if verbose and epoch == dnas_warmup_epochs:
+                        print(f"  [Tau Annealing] tau: 1.0 → 0.1 over {search_epochs} search epochs")
 
         # === 1. Training ===
         model.train()
@@ -121,10 +141,37 @@ def train_v11(
             optimizer.zero_grad()
             prev_val = x[:, -1, 0:1]
 
-            # 接收回傳的權重 (out, base, weights)
-            out, _, gate_weights, _, _ = model(x)
+            # Unpack model output (5 or 6 values)
+            model_output = model(x)
+            out = model_output[0]
+            y_base_out = model_output[1]
+            gate_weights = model_output[2]
+            y_expert_out = model_output[5] if len(model_output) > 5 else None
 
             loss = criterion(out, y, prev_val)
+
+            # Auxiliary residual loss: teach expert to learn what backbone can't predict
+            if y_expert_out is not None and y_base_out is not None:
+                residual_target = y - y_base_out.detach()
+                aux_loss = F.mse_loss(y_expert_out, residual_target)
+                # Decay from 0.1 → 0.01 over training
+                aux_weight = max(0.01, 0.1 * (1 - epoch / max(1, active_epochs - 1)))
+                loss = loss + aux_weight * aux_loss
+
+            # Entropy penalty: encourage DNAS alpha to be decisive (not uniform)
+            if epoch >= dnas_warmup_epochs and hasattr(model, 'get_arch_parameters'):
+                arch_params = list(model.get_arch_parameters())
+                if arch_params:
+                    search_epochs = active_epochs - dnas_warmup_epochs
+                    search_progress = (epoch - dnas_warmup_epochs) / max(1, search_epochs - 1)
+                    entropy_weight = max(0.05, 0.3 * (1 - search_progress))
+
+                    entropy_loss = 0.0
+                    for alpha in arch_params:
+                        probs = F.softmax(alpha, dim=0)
+                        entropy_loss += -(probs * torch.log(probs + 1e-8)).sum()
+                    loss = loss + entropy_weight * entropy_loss
+
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
@@ -148,7 +195,7 @@ def train_v11(
             for batch in val_loader:
                 x, y = batch["raw_input"].to(device), batch["target"].to(device)
                 prev_val = x[:, -1, 0:1]
-                out, _, _, _, _ = model(x)
+                out = model(x)[0]
                 loss = criterion(out, y, prev_val)
                 val_losses.append(loss.item())
 

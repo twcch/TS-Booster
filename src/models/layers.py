@@ -446,6 +446,133 @@ class DNAS_CNNExpert(nn.Module):
         final_output = (outputs_stack * w).sum(dim=-1)
         
         return final_output, weights
+class MultiScaleDecomp(nn.Module):
+    """
+    Multi-Scale Decomposition with Global Learnable Weights.
+
+    Concept: Learn a weighted combination of multiple fixed MA decompositions.
+    - Maintains MA structure (strong inductive bias)
+    - Only 4 learnable scalar parameters (global weights)
+    - "Plug-in" design: can replace any SeriesDecomp
+
+    Formula:
+        trend = w1*MA7(x) + w2*MA13(x) + w3*MA25(x) + w4*MA49(x)
+        seasonal = x - trend
+        where w = softmax(learnable_weights)
+
+    Args:
+        input_channels: Number of input channels
+        kernels: List of kernel sizes (e.g., [7, 13, 25, 49])
+        use_learnable: Whether to use learnable or fixed MA (passed to SeriesDecomp)
+    """
+    def __init__(self, input_channels, kernels=[7, 13, 25, 49], use_learnable=True):
+        super(MultiScaleDecomp, self).__init__()
+
+        self.input_channels = input_channels
+        self.kernels = kernels
+
+        # Fixed MA decompositions for each kernel size
+        self.decomps = nn.ModuleList([
+            SeriesDecomp(
+                kernel_size=k,
+                input_channels=input_channels,
+                use_learnable=use_learnable
+            )
+            for k in kernels
+        ])
+
+        # Global learnable weights (one per kernel)
+        # Initialize uniformly: [1/K, 1/K, ..., 1/K]
+        num_kernels = len(kernels)
+        self.weights = nn.Parameter(torch.ones(num_kernels) / num_kernels)
+
+        print(f"[MultiScaleDecomp] Initialized with kernels {kernels}")
+        print(f"[MultiScaleDecomp] Global weights shape: {self.weights.shape}")
+
+    def get_weights_status(self):
+        """Get current weight distribution (for logging)"""
+        with torch.no_grad():
+            w = F.softmax(self.weights, dim=0)
+        w_list = w.cpu().numpy().tolist()
+
+        status_dict = {}
+        for i, k in enumerate(self.kernels):
+            status_dict[f"MA_{k}"] = w_list[i]
+
+        return status_dict
+
+    def forward(self, x):
+        """
+        Args:
+            x: [Batch, Seq_Len, Channels]
+
+        Returns:
+            trend: [Batch, Seq_Len, Channels]
+            seasonal: [Batch, Seq_Len, Channels]
+            weights: [num_kernels] (for logging)
+        """
+        # 1. Compute softmax weights
+        w = F.softmax(self.weights, dim=0)  # [num_kernels]
+
+        # 2. Compute all decompositions in parallel
+        trends = []
+        seasonals = []
+
+        for decomp in self.decomps:
+            t, s = decomp(x)
+            trends.append(t)
+            seasonals.append(s)
+
+        # Stack: [B, S, C, num_kernels]
+        trends_stack = torch.stack(trends, dim=-1)
+        seasonals_stack = torch.stack(seasonals, dim=-1)
+
+        # 3. Weighted combination
+        # Broadcast weights: [1, 1, 1, num_kernels]
+        w_broadcast = w.view(1, 1, 1, -1)
+
+        final_trend = (trends_stack * w_broadcast).sum(dim=-1)      # [B, S, C]
+        final_seasonal = (seasonals_stack * w_broadcast).sum(dim=-1)  # [B, S, C]
+
+        return final_trend, final_seasonal, w
+
+
+class MultiScaleExpert(nn.Module):
+    """
+    Inception-style Multi-Scale CNN Expert.
+    Multiple parallel conv branches with different kernel sizes, features concatenated.
+    Much lighter than DNAS_CNNExpert (single model vs N parallel full CNNs).
+    """
+    def __init__(self, seq_len, pred_len, input_channels, hidden_dim=32, kernels=[3, 5, 7], dropout_p=0.3):
+        super().__init__()
+        self.pred_len = pred_len
+        self.input_channels = input_channels
+        branch_dim = hidden_dim // len(kernels)
+
+        self.branches = nn.ModuleList()
+        for k in kernels:
+            self.branches.append(nn.Sequential(
+                nn.Conv1d(input_channels, branch_dim, kernel_size=k, padding=(k-1)//2),
+                nn.BatchNorm1d(branch_dim),
+                nn.LeakyReLU(0.1),
+                nn.Dropout(dropout_p),
+            ))
+
+        concat_dim = branch_dim * len(kernels)
+        self.fc = nn.Linear(seq_len * concat_dim, pred_len * input_channels)
+
+    def forward(self, x):
+        # x: [B, S, C]
+        B, S, C = x.shape
+        x_perm = x.permute(0, 2, 1)  # [B, C, S]
+        feats = [branch(x_perm) for branch in self.branches]
+        feat = torch.cat(feats, dim=1)  # [B, concat_dim, S]
+        feat = feat.reshape(B, -1)
+        out = self.fc(feat)  # [B, pred_len * C]
+        out = out.reshape(B, self.pred_len, C)  # [B, pred_len, C]
+        return out
+
+
 class LinearBackbone(nn.Module):
     """
     Simple Linear Backbone.
@@ -457,11 +584,23 @@ class LinearBackbone(nn.Module):
         # User request typically implies "Linear" as in DLinear (single layer).
         # But factory passes hidden_dim. Let's make it a simple single layer linear for "Linear".
         self.flatten_dim = seq_len * input_channels
-        self.fc = nn.Linear(self.flatten_dim, pred_len)
+        self.pred_len = pred_len
+        self.input_channels = input_channels
+        self.fc = nn.Linear(self.flatten_dim, pred_len * input_channels)
 
     def forward(self, x):
         # x: [Batch, Seq_Len, Channels]
-        B = x.shape[0]
+        B, _, C = x.shape
         x_flat = x.reshape(B, -1)
-        out = self.fc(x_flat) # [Batch, Pred_Len]
+        out_flat = self.fc(x_flat)  # [Batch, Pred_Len * Channels]
+        out = out_flat.reshape(B, self.pred_len, C)  # [Batch, Pred_Len, Channels]
+
+        # Handle dimension: squeeze to 2D for compatibility
+        # (assumes univariate output, take first channel if multi-channel input)
+        if out.dim() == 3:
+            if out.size(-1) == 1:
+                out = out.squeeze(-1)  # [B, P, 1] -> [B, P]
+            else:
+                out = out[..., 0]  # [B, P, C] -> [B, P], take first channel only
+
         return out, out, None, None, None
