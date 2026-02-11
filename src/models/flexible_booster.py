@@ -8,7 +8,13 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.models.layers import DNAS_SeriesDecomp, MultiScaleExpert, SeriesDecomp, MultiScaleDecomp
+from src.models.layers import (
+    DNAS_SeriesDecomp,
+    MultiScaleExpert,
+    SeriesDecomp,
+    MultiScaleDecomp,
+    FFTGuidedGaussianDecomp
+)
 
 class FlexibleTSBooster(nn.Module):
     """
@@ -20,6 +26,7 @@ class FlexibleTSBooster(nn.Module):
     - use_gating: 是否使用自適應 Gating
     - use_dnas: 是否使用 DNAS (僅影響 decomposition)
     - use_multiscale_decomp: 是否使用 Multi-Scale Decomposition (Global Weights)
+    - use_fft_gaussian_decomp: 是否使用 FFT-Guided Gaussian Decomposition
     """
     def __init__(
         self,
@@ -33,10 +40,15 @@ class FlexibleTSBooster(nn.Module):
         use_gating=True,
         use_dnas=False,  # Changed default to False
         use_multiscale_decomp=False,  # NEW: Multi-Scale Decomposition
-        # Fixed Params (when use_dnas=False and use_multiscale_decomp=False)
+        use_fft_gaussian_decomp=False,  # NEW: FFT-Guided Gaussian Decomposition
+        # Fixed Params (when use_dnas=False and use_multiscale_decomp=False and use_fft_gaussian_decomp=False)
         fixed_decomp_kernel=25,
         # Multi-Scale Config (when use_multiscale_decomp=True)
         multiscale_kernels=[7, 13, 25, 49],
+        # FFT Gaussian Config (when use_fft_gaussian_decomp=True)
+        fft_init_sigma=None,  # If None, auto-initialize from FFT
+        fft_min_sigma=1.0,
+        fft_max_sigma=50.0,
         # DNAS Config (when use_dnas=True, only for decomp)
         decomp_dnas_kernels=[7, 13, 25, 49, 'identity'],
         # Expert Config
@@ -62,11 +74,13 @@ class FlexibleTSBooster(nn.Module):
         self.use_gating = use_gating
         self.use_dnas = use_dnas
         self.use_multiscale_decomp = use_multiscale_decomp
+        self.use_fft_gaussian_decomp = use_fft_gaussian_decomp
         self.gating_fixed = True  # For compatibility with trainer
 
-        # Sanity check: cannot use both DNAS and MultiScale at the same time
-        if self.use_dnas and self.use_multiscale_decomp:
-            raise ValueError("Cannot use both use_dnas=True and use_multiscale_decomp=True simultaneously")
+        # Sanity check: only one decomp method at a time
+        decomp_methods = sum([self.use_dnas, self.use_multiscale_decomp, self.use_fft_gaussian_decomp])
+        if decomp_methods > 1:
+            raise ValueError("Can only use one of: use_dnas, use_multiscale_decomp, use_fft_gaussian_decomp")
 
         # Backbone(s): Create 2 instances when decomp enabled (DLinear-style)
         if self.use_decomp:
@@ -80,7 +94,7 @@ class FlexibleTSBooster(nn.Module):
             self.backbone_trend = None
             self.backbone_seasonal = None
 
-        # 1. Decomposition (DNAS / MultiScale / Fixed)
+        # 1. Decomposition (DNAS / MultiScale / FFT-Gaussian / Fixed)
         if self.use_decomp:
             if self.use_dnas:
                 # DNAS: Differentiable Architecture Search for kernel selection
@@ -95,6 +109,15 @@ class FlexibleTSBooster(nn.Module):
                     input_channels=input_channels,
                     kernels=multiscale_kernels,
                     use_learnable=True
+                )
+            elif self.use_fft_gaussian_decomp:
+                # FFT-Guided Gaussian: Learnable continuous smoothing scale
+                self.decomp = FFTGuidedGaussianDecomp(
+                    input_channels=input_channels,
+                    seq_len=seq_len,
+                    init_sigma=fft_init_sigma,
+                    min_sigma=fft_min_sigma,
+                    max_sigma=fft_max_sigma
                 )
             else:
                 # Fixed: Single fixed kernel
@@ -130,8 +153,8 @@ class FlexibleTSBooster(nn.Module):
         # A. Decomposition + Backbone Prediction (DLinear-style when decomp enabled)
         if self.use_decomp and self.decomp is not None:
             # Step 1: Decompose into trend and seasonal
-            if self.use_dnas or self.use_multiscale_decomp:
-                # Both DNAS and MultiScale return weights
+            if self.use_dnas or self.use_multiscale_decomp or self.use_fft_gaussian_decomp:
+                # DNAS, MultiScale, and FFT-Gaussian all return weights/sigma
                 trend_part, seasonal_part, decomp_weights = self.decomp(x)
             else:
                 # Fixed decomposition doesn't return weights

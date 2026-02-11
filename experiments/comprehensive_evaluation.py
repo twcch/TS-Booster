@@ -174,7 +174,28 @@ class ComprehensiveTSBoosterExperiment:
                 'use_gating': False,
                 'use_dnas': False,
                 'use_multiscale_decomp': True,
+                'use_fft_gaussian_decomp': False,
                 'description': 'Multi-Scale Decomp + Experts'
+            },
+            {
+                'name': '+FFT-Gaussian',
+                'use_decomp': True,
+                'use_experts': False,
+                'use_gating': False,
+                'use_dnas': False,
+                'use_multiscale_decomp': False,
+                'use_fft_gaussian_decomp': True,
+                'description': 'FFT-Guided Gaussian Decomp (Learnable σ)'
+            },
+            {
+                'name': '+FFT-Gaussian+Experts',
+                'use_decomp': True,
+                'use_experts': True,
+                'use_gating': False,
+                'use_dnas': False,
+                'use_multiscale_decomp': False,
+                'use_fft_gaussian_decomp': True,
+                'description': 'FFT-Guided Gaussian + Experts'
             },
             {
                 'name': 'Full (DNAS)',
@@ -183,6 +204,7 @@ class ComprehensiveTSBoosterExperiment:
                 'use_gating': False,
                 'use_dnas': True,
                 'use_multiscale_decomp': False,
+                'use_fft_gaussian_decomp': False,
                 'description': 'DNAS Decomp + Experts (gate=1)'
             }
         ]
@@ -213,8 +235,12 @@ class ComprehensiveTSBoosterExperiment:
                     use_gating=exp_config['use_gating'],
                     use_dnas=exp_config['use_dnas'],
                     use_multiscale_decomp=exp_config.get('use_multiscale_decomp', False),
+                    use_fft_gaussian_decomp=exp_config.get('use_fft_gaussian_decomp', False),
                     fixed_decomp_kernel=25,
                     multiscale_kernels=[7, 13, 25, 49],
+                    fft_init_sigma=None,  # Auto-initialize from FFT
+                    fft_min_sigma=1.0,
+                    fft_max_sigma=50.0,
                     fixed_trend_kernel=5,
                     fixed_seasonal_kernel=5,
                     trend_dnas_kernels=config.get('trend_dnas_kernels', [3, 5, 7, 9]),
@@ -243,6 +269,11 @@ class ComprehensiveTSBoosterExperiment:
             if exp_config.get('use_multiscale_decomp', False) and hasattr(trained_model, 'decomp'):
                 if hasattr(trained_model.decomp, 'get_weights_status'):
                     metrics['multiscale_weights'] = trained_model.decomp.get_weights_status()
+
+            # Extract FFT-Gaussian sigma if available
+            if exp_config.get('use_fft_gaussian_decomp', False) and hasattr(trained_model, 'decomp'):
+                if hasattr(trained_model.decomp, 'get_sigma_status'):
+                    metrics['fft_gaussian_sigma'] = trained_model.decomp.get_sigma_status()
 
             ablation_results[exp_config['name']] = metrics
             

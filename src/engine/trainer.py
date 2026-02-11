@@ -109,7 +109,9 @@ def train_v11(
                 model.set_gating_status(fixed=True)
             else:
                 if epoch == dnas_warmup_epochs:
-                    if verbose: print(f"  [Scheduler] Search Mode: DNAS Active, Gates Adaptive (Epoch {dnas_warmup_epochs}+)")
+                    if verbose:
+                        print(f"  [Scheduler] Search Mode: DNAS Active, Gates Adaptive (Epoch {dnas_warmup_epochs}+)")
+                        print(f"  [P5 - Expert-Aware DNAS] Aux Loss weight boosted: 0.1 → 1.0 (search phase)")
                     # Reset early stopping + LR so search gets a fair chance
                     counter = 0
                     for pg in optimizer.param_groups:
@@ -135,6 +137,7 @@ def train_v11(
         losses = []
         trend_gate_values = []
         seas_gate_values = []
+        aux_losses = []  # Track aux loss separately for diagnostics
 
         for batch in train_loader:
             x, y = batch["raw_input"].to(device), batch["target"].to(device)
@@ -151,12 +154,24 @@ def train_v11(
             loss = criterion(out, y, prev_val)
 
             # Auxiliary residual loss: teach expert to learn what backbone can't predict
+            # P5 FIX: Expert-aware DNAS - boost aux_loss during search phase
             if y_expert_out is not None and y_base_out is not None:
                 residual_target = y - y_base_out.detach()
                 aux_loss = F.mse_loss(y_expert_out, residual_target)
-                # Decay from 0.1 → 0.01 over training
-                aux_weight = max(0.01, 0.1 * (1 - epoch / max(1, active_epochs - 1)))
+
+                # Dynamic aux_weight based on training phase
+                if epoch < dnas_warmup_epochs:
+                    # Warmup: moderate weight, let backbone learn first
+                    aux_weight = 0.1
+                else:
+                    # Search phase: HIGH weight to guide DNAS toward expert-friendly decomp
+                    search_epochs = active_epochs - dnas_warmup_epochs
+                    search_progress = (epoch - dnas_warmup_epochs) / max(1, search_epochs - 1)
+                    # Decay from 1.0 → 0.1 (keep high throughout search)
+                    aux_weight = max(0.1, 1.0 * (1 - search_progress * 0.9))
+
                 loss = loss + aux_weight * aux_loss
+                aux_losses.append((aux_loss.item(), aux_weight))  # Track for logging
 
             # Entropy penalty: encourage DNAS alpha to be decisive (not uniform)
             if epoch >= dnas_warmup_epochs and hasattr(model, 'get_arch_parameters'):
@@ -215,9 +230,15 @@ def train_v11(
         # === 3. Logging & Early Stopping ===
         # 印出當前狀態 (包含權重資訊)
         current_lr = optimizer.param_groups[0]["lr"]
+
+        # Calculate average aux_loss and weight for this epoch
+        avg_aux_loss = np.mean([x[0] for x in aux_losses]) if aux_losses else 0.0
+        avg_aux_weight = np.mean([x[1] for x in aux_losses]) if aux_losses else 0.0
+
         if verbose and ((epoch + 1) % 10 == 0 or epoch == 0):
+            aux_info = f" | Aux: {avg_aux_loss:.4f}(w={avg_aux_weight:.2f})" if aux_losses else ""
             print(
-                f"Epoch {epoch + 1:3d} | LR: {current_lr:.6f} | Train: {train_loss:.4f} | Val: {avg_val_loss:.4f} | Trend Gate: {t_w:.3f} | Seas Gate: {s_w:.3f}"
+                f"Epoch {epoch + 1:3d} | LR: {current_lr:.6f} | Train: {train_loss:.4f} | Val: {avg_val_loss:.4f}{aux_info} | T_Gate: {t_w:.3f} | S_Gate: {s_w:.3f}"
             )
             
             # --- DNAS Diagnostics Logging ---

@@ -537,6 +537,191 @@ class MultiScaleDecomp(nn.Module):
         return final_trend, final_seasonal, w
 
 
+class FFTGuidedGaussianDecomp(nn.Module):
+    """
+    FFT-Guided Gaussian Decomposition with Learnable Smoothing.
+
+    Concept: Use continuous Gaussian smoothing with learnable σ (scale parameter).
+    - FFT-guided initialization: Estimate dominant period from frequency domain
+    - Learnable σ: Continuous optimization (more gradient-friendly than discrete kernels)
+    - Gaussian kernel: Smooth trend extraction with mathematical properties
+
+    Formula:
+        trend = GaussianSmooth(x, σ)
+        seasonal = x - trend
+        where σ ∈ ℝ+ is learnable
+
+    Args:
+        input_channels: Number of input channels
+        seq_len: Sequence length (for FFT analysis)
+        init_sigma: Initial σ value (if None, will be estimated from FFT)
+        min_sigma: Minimum allowed σ (for stability)
+        max_sigma: Maximum allowed σ (to prevent over-smoothing)
+    """
+    def __init__(self, input_channels, seq_len, init_sigma=None, min_sigma=1.0, max_sigma=50.0):
+        super(FFTGuidedGaussianDecomp, self).__init__()
+
+        self.input_channels = input_channels
+        self.seq_len = seq_len
+        self.min_sigma = min_sigma
+        self.max_sigma = max_sigma
+
+        # Learnable log(σ) for numerical stability
+        # Will initialize from FFT on first forward pass if init_sigma is None
+        if init_sigma is not None:
+            init_log_sigma = torch.log(torch.tensor(init_sigma).clamp(min_sigma, max_sigma))
+        else:
+            # Default initialization: σ = seq_len / 6 (typical heuristic)
+            init_log_sigma = torch.log(torch.tensor(seq_len / 6.0).clamp(min_sigma, max_sigma))
+
+        self.log_sigma = nn.Parameter(init_log_sigma)
+        self._fft_initialized = (init_sigma is not None)
+
+        print(f"[FFTGuidedGaussianDecomp] Initialized with seq_len={seq_len}")
+        print(f"[FFTGuidedGaussianDecomp] Initial σ = {torch.exp(self.log_sigma).item():.2f}")
+
+    def estimate_period_from_fft(self, x):
+        """
+        Estimate dominant period from FFT analysis.
+
+        Args:
+            x: [Batch, Seq_Len, Channels]
+
+        Returns:
+            estimated_period: Scalar tensor
+        """
+        # Average across batch and channels for robust estimate
+        x_mean = x.mean(dim=(0, 2))  # [Seq_Len]
+
+        # FFT to find dominant frequency
+        fft = torch.fft.rfft(x_mean)
+        power_spectrum = torch.abs(fft) ** 2
+
+        # Ignore DC component (index 0) and find peak
+        peak_idx = torch.argmax(power_spectrum[1:]) + 1
+
+        # Convert frequency index to period
+        # period = seq_len / frequency_index
+        estimated_period = self.seq_len / peak_idx.float()
+
+        return estimated_period
+
+    def initialize_from_fft(self, x):
+        """
+        Initialize σ from FFT analysis (called once on first forward).
+
+        Heuristic: σ ≈ period / 4 (smooth over ~quarter of dominant cycle)
+        """
+        if self._fft_initialized:
+            return
+
+        with torch.no_grad():
+            period = self.estimate_period_from_fft(x)
+            # Initialize σ to smooth over ~quarter of the dominant period
+            init_sigma = (period / 4.0).clamp(self.min_sigma, self.max_sigma)
+            self.log_sigma.data = torch.log(init_sigma)
+
+            print(f"[FFTGuidedGaussianDecomp] FFT Initialization:")
+            print(f"  Estimated period: {period.item():.2f}")
+            print(f"  Initial σ: {init_sigma.item():.2f}")
+
+        self._fft_initialized = True
+
+    def gaussian_kernel_1d(self, sigma, kernel_size):
+        """
+        Generate 1D Gaussian kernel.
+
+        Args:
+            sigma: Standard deviation
+            kernel_size: Kernel size (should be odd)
+
+        Returns:
+            kernel: [kernel_size] normalized Gaussian kernel
+        """
+        # Ensure kernel_size is odd
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+
+        # Create coordinate grid centered at 0
+        x = torch.arange(kernel_size, dtype=sigma.dtype, device=sigma.device)
+        x = x - kernel_size // 2
+
+        # Gaussian formula: exp(-x^2 / (2*σ^2))
+        kernel = torch.exp(-x ** 2 / (2 * sigma ** 2))
+
+        # Normalize to sum to 1
+        kernel = kernel / kernel.sum()
+
+        return kernel
+
+    def gaussian_smooth(self, x, sigma):
+        """
+        Apply Gaussian smoothing to extract trend.
+
+        Args:
+            x: [Batch, Seq_Len, Channels]
+            sigma: Scalar tensor (smoothing scale)
+
+        Returns:
+            trend: [Batch, Seq_Len, Channels]
+        """
+        B, S, C = x.shape
+
+        # Dynamic kernel size: 6σ rule (covers 99.7% of Gaussian)
+        kernel_size = int(6 * sigma.item()) + 1
+        kernel_size = min(kernel_size, S)  # Cap at sequence length
+
+        # Generate Gaussian kernel
+        kernel = self.gaussian_kernel_1d(sigma, kernel_size)  # [K]
+
+        # Reshape for conv1d: [out_channels, in_channels, kernel_size]
+        # Apply same kernel to all channels independently
+        kernel = kernel.view(1, 1, -1).repeat(C, 1, 1)  # [C, 1, K]
+
+        # Reshape input for conv1d: [B, C, S]
+        x_perm = x.permute(0, 2, 1)
+
+        # Apply depthwise convolution (groups=C)
+        # Padding: 'same' to preserve length
+        padding = kernel_size // 2
+        trend = F.conv1d(x_perm, kernel, padding=padding, groups=C)
+
+        # Reshape back: [B, S, C]
+        trend = trend.permute(0, 2, 1)
+
+        return trend
+
+    def get_sigma_status(self):
+        """Get current σ value (for logging)"""
+        with torch.no_grad():
+            sigma = torch.exp(self.log_sigma).clamp(self.min_sigma, self.max_sigma)
+        return {"sigma": sigma.item()}
+
+    def forward(self, x):
+        """
+        Args:
+            x: [Batch, Seq_Len, Channels]
+
+        Returns:
+            trend: [Batch, Seq_Len, Channels]
+            seasonal: [Batch, Seq_Len, Channels]
+            sigma: Scalar tensor (for logging)
+        """
+        # Initialize from FFT on first forward pass
+        self.initialize_from_fft(x)
+
+        # Get current σ (constrained to valid range)
+        sigma = torch.exp(self.log_sigma).clamp(self.min_sigma, self.max_sigma)
+
+        # Apply Gaussian smoothing to extract trend
+        trend = self.gaussian_smooth(x, sigma)
+
+        # Seasonal = residual
+        seasonal = x - trend
+
+        return trend, seasonal, sigma
+
+
 class MultiScaleExpert(nn.Module):
     """
     Inception-style Multi-Scale CNN Expert.
