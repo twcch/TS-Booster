@@ -6,6 +6,7 @@ import os
 
 from src.models.network import EnhancedDLinear
 from src.utils.metrics import HybridDirectionalLoss
+from src.engine.adaptive_scheduler import AdaptiveWeightScheduler
 
 
 def train_v11(
@@ -81,7 +82,11 @@ def train_v11(
     best_val_loss = float("inf")
     patience = 20
     counter = 0
-    
+
+    # P6: Initialize adaptive weight scheduler
+    dnas_warmup_epochs = config.get('dnas_warmup_epochs', max(1, active_epochs // 5))
+    adaptive_scheduler = AdaptiveWeightScheduler(warmup_epochs=dnas_warmup_epochs, verbose=verbose)
+
     # 使用臨時文件避免不同配置之間的衝突
     checkpoint_file = tempfile.NamedTemporaryFile(mode='w+b', suffix='.pth', delete=False)
     checkpoint_path = checkpoint_file.name
@@ -111,7 +116,7 @@ def train_v11(
                 if epoch == dnas_warmup_epochs:
                     if verbose:
                         print(f"  [Scheduler] Search Mode: DNAS Active, Gates Adaptive (Epoch {dnas_warmup_epochs}+)")
-                        print(f"  [P5 - Expert-Aware DNAS] Aux Loss weight boosted: 0.1 → 1.0 (search phase)")
+                        print(f"  [P6 - Adaptive Multi-Objective] Dynamic loss weighting activated")
                     # Reset early stopping + LR so search gets a fair chance
                     counter = 0
                     for pg in optimizer.param_groups:
@@ -153,25 +158,25 @@ def train_v11(
 
             loss = criterion(out, y, prev_val)
 
-            # Auxiliary residual loss: teach expert to learn what backbone can't predict
-            # P5 FIX: Expert-aware DNAS - boost aux_loss during search phase
+            # P6: Adaptive Multi-Objective Loss
+            # Compute auxiliary losses for base and expert separately
             if y_expert_out is not None and y_base_out is not None:
+                # Expert auxiliary loss: how well expert predicts residual
                 residual_target = y - y_base_out.detach()
                 aux_loss = F.mse_loss(y_expert_out, residual_target)
 
-                # Dynamic aux_weight based on training phase
-                if epoch < dnas_warmup_epochs:
-                    # Warmup: moderate weight, let backbone learn first
-                    aux_weight = 0.1
-                else:
-                    # Search phase: HIGH weight to guide DNAS toward expert-friendly decomp
-                    search_epochs = active_epochs - dnas_warmup_epochs
-                    search_progress = (epoch - dnas_warmup_epochs) / max(1, search_epochs - 1)
-                    # Decay from 1.0 → 0.1 (keep high throughout search)
-                    aux_weight = max(0.1, 1.0 * (1 - search_progress * 0.9))
+                # Base auxiliary loss: how well base predicts by itself
+                base_loss = F.mse_loss(y_base_out, y)
 
-                loss = loss + aux_weight * aux_loss
-                aux_losses.append((aux_loss.item(), aux_weight))  # Track for logging
+                # Get adaptive weights from scheduler
+                # (Weights are updated based on validation performance each epoch)
+                weights = adaptive_scheduler.get_weights(epoch)
+                aux_weight = weights['aux']
+                base_weight = weights['base']
+
+                # Combined loss with adaptive weights
+                loss = loss + aux_weight * aux_loss + base_weight * base_loss
+                aux_losses.append((aux_loss.item(), aux_weight, base_loss.item(), base_weight))  # Track for logging
 
             # Entropy penalty: encourage DNAS alpha to be decisive (not uniform)
             if epoch >= dnas_warmup_epochs and hasattr(model, 'get_arch_parameters'):
@@ -204,18 +209,45 @@ def train_v11(
                     seas_gate_values.append(gate_weights[1].item())
 
         # === 2. Validation ===
+        # P6: Compute separate losses for base, expert, and overall
         model.eval()
         val_losses = []
+        val_base_losses = []
+        val_expert_losses = []
+
         with torch.no_grad():
             for batch in val_loader:
                 x, y = batch["raw_input"].to(device), batch["target"].to(device)
                 prev_val = x[:, -1, 0:1]
-                out = model(x)[0]
+
+                # Get full model output
+                model_output = model(x)
+                out = model_output[0]  # Overall prediction
+                y_base_val = model_output[1] if len(model_output) > 1 else None
+                y_expert_val = model_output[5] if len(model_output) > 5 else None
+
+                # Overall loss
                 loss = criterion(out, y, prev_val)
                 val_losses.append(loss.item())
 
+                # Separate component losses for adaptive weighting
+                if y_base_val is not None:
+                    base_loss_val = F.mse_loss(y_base_val, y)
+                    val_base_losses.append(base_loss_val.item())
+
+                if y_expert_val is not None and y_base_val is not None:
+                    residual_target_val = y - y_base_val
+                    expert_loss_val = F.mse_loss(y_expert_val, residual_target_val)
+                    val_expert_losses.append(expert_loss_val.item())
+
         train_loss = np.mean(losses)
         avg_val_loss = np.mean(val_losses)
+        avg_val_base = np.mean(val_base_losses) if val_base_losses else avg_val_loss
+        avg_val_expert = np.mean(val_expert_losses) if val_expert_losses else avg_val_loss
+
+        # P6: Update adaptive scheduler with component losses
+        adaptive_scheduler.update(avg_val_base, avg_val_expert, avg_val_loss, epoch)
+
         scheduler.step(avg_val_loss)
 
         # 計算平均權重 (若無 CNN 則為 0)
@@ -232,11 +264,24 @@ def train_v11(
         current_lr = optimizer.param_groups[0]["lr"]
 
         # Calculate average aux_loss and weight for this epoch
-        avg_aux_loss = np.mean([x[0] for x in aux_losses]) if aux_losses else 0.0
-        avg_aux_weight = np.mean([x[1] for x in aux_losses]) if aux_losses else 0.0
+        # P6: Now tracking both aux (expert) and base losses
+        if aux_losses and len(aux_losses[0]) == 4:  # New format with base loss
+            avg_aux_loss = np.mean([x[0] for x in aux_losses])
+            avg_aux_weight = np.mean([x[1] for x in aux_losses])
+            avg_base_loss_train = np.mean([x[2] for x in aux_losses])
+            avg_base_weight = np.mean([x[3] for x in aux_losses])
+        else:  # Fallback for old format
+            avg_aux_loss = np.mean([x[0] for x in aux_losses]) if aux_losses else 0.0
+            avg_aux_weight = np.mean([x[1] for x in aux_losses]) if aux_losses else 0.0
+            avg_base_loss_train = 0.0
+            avg_base_weight = 0.0
 
         if verbose and ((epoch + 1) % 10 == 0 or epoch == 0):
-            aux_info = f" | Aux: {avg_aux_loss:.4f}(w={avg_aux_weight:.2f})" if aux_losses else ""
+            if aux_losses and len(aux_losses[0]) == 4:
+                aux_info = f" | Exp: {avg_aux_loss:.3f}(w={avg_aux_weight:.2f}) | Base: {avg_base_loss_train:.3f}(w={avg_base_weight:.2f})"
+            else:
+                aux_info = f" | Aux: {avg_aux_loss:.4f}(w={avg_aux_weight:.2f})" if aux_losses else ""
+
             print(
                 f"Epoch {epoch + 1:3d} | LR: {current_lr:.6f} | Train: {train_loss:.4f} | Val: {avg_val_loss:.4f}{aux_info} | T_Gate: {t_w:.3f} | S_Gate: {s_w:.3f}"
             )
@@ -288,7 +333,16 @@ def train_v11(
         print(
             f"\n[Training Completed] Loading best model (Val Loss: {best_val_loss:.4f})..."
         )
-    
+
+        # P6: Print adaptive scheduler summary
+        if hasattr(model, 'toggle_dnas_mode'):  # Only for models with DNAS
+            summary = adaptive_scheduler.get_summary()
+            print("\n[P6.1 - Adaptive Multi-Objective Summary (with Smoothing)]")
+            print(f"  Best Losses - Overall: {summary['best_overall']:.4f}, Base: {summary['best_base']:.4f}, Expert: {summary['best_expert']:.4f}")
+            print(f"  Final Weights - Aux: {summary['final_aux_weight']:.3f}, Base: {summary['final_base_weight']:.3f}")
+            print(f"  Average Weights - Aux: {summary['avg_aux_weight']:.3f}, Base: {summary['avg_base_weight']:.3f}")
+            print(f"  Final Smoothed Gaps - Base: {summary['final_smoothed_base_gap']:.4f}, Expert: {summary['final_smoothed_expert_gap']:.4f}")
+
     # 從臨時文件載入最佳模型
     model.load_state_dict(torch.load(checkpoint_path, weights_only=True))
     
