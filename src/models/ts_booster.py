@@ -1,18 +1,17 @@
-import copy
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from src.models.layers import DNAS_SeriesDecomp, MultiScaleExpert
+from src.models.layers import MultiScaleDecomp, create_expert
+
 
 class TS_Booster(nn.Module):
     """
     Time-Series Booster Module (Adapter Pattern).
     Wraps any base model (backbone) and enhances it with:
-    1. Adaptive Decomposition (DNAS)
-    2. Multi-Scale Experts (Inception-style)
-    3. Simple Additive Fusion (gate=1)
-
-    Formula: Y_final = Y_Base + Y_Expert
+    1. Learnable Multi-Scale Decomposition (weighted MA ensemble)
+    2. Single Backbone on raw input
+    3. Decomposition-Enriched Expert (raw + seasonal features)
+    4. Multi-Round Boosting
+    5. Additive Fusion: Y_final = Y_Base + Y_Expert
     """
     def __init__(
         self,
@@ -20,104 +19,84 @@ class TS_Booster(nn.Module):
         seq_len,
         pred_len,
         input_channels,
-        # DNAS Config (decomp only)
-        decomp_dnas_kernels=[7, 13, 25, 49, 'identity'],
-        # Expert Config
+        decomp_kernels=[7, 13],
         expert_kernels=[3, 5, 7],
-        trend_hidden_dim=32,
-        seasonal_hidden_dim=32,
+        expert_hidden_dim=32,
         dropout_p=0.3,
-        # Legacy params (ignored, kept for backward compat)
-        trend_dnas_kernels=None,
-        seasonal_dnas_kernels=None,
+        n_boost_rounds=1,
+        expert_type='cnn',
+        # Legacy/unused params
+        n_freq=None,
+        decomp_kernel=None, trend_hidden_dim=None, seasonal_hidden_dim=None,
+        multiscale_kernels=None, decomp_dnas_kernels=None,
+        trend_dnas_kernels=None, seasonal_dnas_kernels=None,
     ):
-        super(TS_Booster, self).__init__()
+        super().__init__()
 
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.input_channels = input_channels
+        self.n_boost_rounds = n_boost_rounds
 
-        # Backbone(s): Always use 2 instances for DLinear-style decomposition
-        self.backbone_trend = copy.deepcopy(base_model)
-        self.backbone_seasonal = copy.deepcopy(base_model)
+        # Single backbone on raw input
+        self.backbone = base_model
 
-        # 1. Adaptive Decomposition (DNAS)
-        self.decomp = DNAS_SeriesDecomp(
-            input_channels=input_channels,
-            candidate_kernels=decomp_dnas_kernels,
-            use_learnable=True
-        )
+        # Multi-Scale Decomposition (for expert enrichment)
+        self.decomp = MultiScaleDecomp(kernels=decomp_kernels)
 
-        # 2. Multi-Scale Experts (Inception-style, no DNAS)
-        self.trend_expert = MultiScaleExpert(
-            seq_len=seq_len, pred_len=pred_len, input_channels=input_channels,
-            hidden_dim=trend_hidden_dim, kernels=expert_kernels, dropout_p=dropout_p
-        )
-        self.seasonal_expert = MultiScaleExpert(
-            seq_len=seq_len, pred_len=pred_len, input_channels=input_channels,
-            hidden_dim=seasonal_hidden_dim, kernels=expert_kernels, dropout_p=dropout_p
-        )
-
-        # DNAS Interface
-        self.dnas_tau = 1.0
-        self.gating_fixed = True  # For compatibility with trainer
+        # Multi-Round Boosting experts
+        self.experts = nn.ModuleList()
+        for _ in range(n_boost_rounds):
+            self.experts.append(create_expert(
+                expert_type=expert_type,
+                seq_len=seq_len, pred_len=pred_len,
+                input_channels=input_channels * 2,
+                hidden_dim=expert_hidden_dim, kernels=expert_kernels,
+                dropout_p=dropout_p
+            ))
 
     def forward(self, x):
-        # x: [Batch, Seq_Len, Channels]
         B, S, C = x.shape
 
-        # A. Decomposition (DNAS)
-        trend_part, seasonal_part, decomp_weights = self.decomp(x)
+        # 1. Multi-Scale Decomposition (for expert enrichment)
+        trend_part, seasonal_part = self.decomp(x)
 
-        # B. Backbone Prediction (System 1) - DLinear-style: model(trend) + model(seasonal)
-        y_trend_base = self.backbone_trend(trend_part)
-        y_seasonal_base = self.backbone_seasonal(seasonal_part)
+        # 2. Backbone prediction (single backbone on raw)
+        y_base = self.backbone(x)
+        if isinstance(y_base, tuple): y_base = y_base[0]
+        if y_base.dim() == 3:
+            y_base = y_base.squeeze(-1) if y_base.size(-1) == 1 else y_base[..., 0]
 
-        # Handle tuple outputs and dimension mismatches
-        if isinstance(y_trend_base, tuple):
-            y_trend_base = y_trend_base[0]
-        if isinstance(y_seasonal_base, tuple):
-            y_seasonal_base = y_seasonal_base[0]
+        # 3. Enriched expert input: [raw, seasonal]
+        x_enriched = torch.cat([x, seasonal_part], dim=-1)
 
-        if y_trend_base.dim() == 3:
-            y_trend_base = y_trend_base.squeeze(-1) if y_trend_base.size(-1) == 1 else y_trend_base[..., 0]
-        if y_seasonal_base.dim() == 3:
-            y_seasonal_base = y_seasonal_base.squeeze(-1) if y_seasonal_base.size(-1) == 1 else y_seasonal_base[..., 0]
+        # 4. Multi-Round Boosting
+        y_expert_total = torch.zeros_like(y_base)
+        expert_rounds = []
+        for expert in self.experts:
+            y_round = expert(x_enriched)
+            expert_rounds.append(y_round)
+            y_expert_total = y_expert_total + y_round
 
-        # Combine backbone predictions
-        y_base = y_trend_base + y_seasonal_base
+        # 5. Additive fusion
+        y_final = y_base + y_expert_total
 
-        # C. Expert Prediction (System 2)
-        y_trend_expert = self.trend_expert(trend_part)
-        y_seasonal_expert = self.seasonal_expert(seasonal_part)
-        y_expert = y_trend_expert + y_seasonal_expert
-
-        # D. Simple Additive Fusion (gate=1)
-        y_final = y_base + y_expert
-
-        # Aux returns for logging (fixed gate=1 for compatibility)
         one = torch.tensor(1.0, device=x.device)
         zero = torch.tensor(0.0, device=x.device)
         weights_to_return = torch.stack([one, zero, zero])
 
-        return y_final, y_base, weights_to_return, trend_part, seasonal_part, y_expert
+        return y_final, y_base, weights_to_return, trend_part, seasonal_part, y_expert_total, expert_rounds
 
-    # --- DNAS Interface (decomp only) ---
-    def set_tau(self, tau):
-        self.dnas_tau = tau
-        self.decomp.set_tau(tau)
+    # Compatibility stubs for trainer
+    def set_tau(self, tau): pass
+    def set_gating_status(self, fixed=True): pass
+    def toggle_dnas_mode(self, mode="warmup"): pass
+    def get_dnas_status(self): return {}
+    def get_arch_parameters(self): return []
+    def get_model_parameters(self): return list(self.parameters())
 
-    def set_gating_status(self, fixed=True):
-        """Set gating status (kept for compatibility, no-op since we use fixed gate=1)"""
-        self.gating_fixed = fixed
-
-    def toggle_dnas_mode(self, mode="warmup"):
-        self.decomp.toggle_dnas_mode(mode)
-
-    def get_dnas_status(self):
-        return {
-            "decomp": self.decomp.get_dnas_status(),
-        }
-
-    def get_arch_parameters(self):
-        yield from self.decomp.get_arch_parameters()
+    def get_multiscale_weights(self):
+        if hasattr(self.decomp, '_last_weights') and self.decomp._last_weights is not None:
+            w = self.decomp._last_weights.cpu().tolist()
+            return {str(k): v for k, v in zip(self.decomp.kernels, w)}
+        return None

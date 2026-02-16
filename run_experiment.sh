@@ -21,10 +21,10 @@ show_usage() {
     echo "  ./run_experiment.sh [experiment_type] [options]"
     echo ""
     echo "實驗類型:"
-    echo "  ablation          - 運行 Ablation Study"
-    echo "  cross-backbone    - 運行 Cross-Backbone Validation"
-    echo "  all              - 運行所有實驗"
-    echo "  test             - 運行驗證測試"
+    echo "  ablation          - 運行 Ablation Study (4 種配置)"
+    echo "  cross-backbone    - 運行 Cross-Backbone Validation (4 種骨幹)"
+    echo "  all               - 運行所有實驗 (消融 + 骨幹)"
+    echo "  test              - 運行驗證測試"
     echo ""
     echo "選項:"
     echo "  --quick          - 快速測試 (20 epochs)"
@@ -37,6 +37,7 @@ show_usage() {
     echo "  ./run_experiment.sh ablation --quick"
     echo "  ./run_experiment.sh all --epochs 100"
     echo "  ./run_experiment.sh cross-backbone --dataset JPY_TWD --seed 123"
+    echo "  ./run_experiment.sh all --epochs 100 --dataset JPY_TWD"
     echo ""
 }
 
@@ -55,6 +56,7 @@ QUICK_MODE=""
 DATASET="USD_TWD"
 SEED=42
 KEEP_OLD=""
+USE_PRE_ORACLE=""
 
 # 解析選項
 while [[ $# -gt 0 ]]; do
@@ -95,14 +97,21 @@ echo "開始執行實驗"
 echo -e "==================================${NC}"
 echo -e "${YELLOW}實驗類型:${NC} $EXPERIMENT_TYPE"
 echo -e "${YELLOW}訓練輪數:${NC} $EPOCHS epochs"
-echo -e "${YELLOW}數據集:${NC} $DATASET"
+
+# 根據實驗類型顯示不同的數據集資訊
+if [ "$EXPERIMENT_TYPE" == "oracle" ]; then
+    echo -e "${YELLOW}數據集:${NC} 分析所有現有結果"
+else
+    echo -e "${YELLOW}數據集:${NC} $DATASET"
+fi
+
 echo -e "${YELLOW}隨機種子:${NC} $SEED"
 if [ -n "$QUICK_MODE" ]; then
     echo -e "${YELLOW}模式:${NC} 快速測試"
 fi
-if [ -n "$KEEP_OLD" ]; then
+if [ -n "$KEEP_OLD" ] && [ "$EXPERIMENT_TYPE" != "oracle" ]; then
     echo -e "${YELLOW}舊結果:${NC} 保留"
-else
+elif [ "$EXPERIMENT_TYPE" != "oracle" ]; then
     echo -e "${YELLOW}舊結果:${NC} 自動清理"
 fi
 echo ""

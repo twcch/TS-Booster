@@ -17,7 +17,7 @@ class HybridDirectionalLoss(nn.Module):
         true_delta = target - prev_value
         pred_delta = pred - prev_value
         mask = torch.abs(true_delta) > self.threshold
-        
+
         if mask.sum() > 0:
             true_sign = torch.sign(true_delta[mask])
             pred_val = pred_delta[mask]
