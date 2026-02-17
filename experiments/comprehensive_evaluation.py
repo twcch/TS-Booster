@@ -141,6 +141,14 @@ class ComprehensiveTSBoosterExperiment:
             if exp_config['name'] == 'Vanilla':
                 model = backbone
             else:
+                # Extra kwargs only for TS-Booster (both decomp+expert)
+                extra_kwargs = {}
+                if exp_config['use_decomp'] and exp_config['use_experts']:
+                    extra_kwargs = {
+                        'expert_gate': config.get('expert_gate', None),
+                        'enrich_mode': config.get('enrich_mode', 'seasonal'),
+                        'seasonal_dropout_p': config.get('seasonal_dropout_p', 0.0),
+                    }
                 model = FlexibleTSBooster(
                     base_model=backbone,
                     seq_len=seq_len,
@@ -154,7 +162,8 @@ class ComprehensiveTSBoosterExperiment:
                     dropout_p=config.get('dropout', 0.3),
                     n_freq=config.get('n_freq', 4),
                     n_boost_rounds=config.get('n_boost_rounds', 2),
-                    expert_type=config.get('expert_type', 'cnn')
+                    expert_type=config.get('expert_type', 'cnn'),
+                    **extra_kwargs
                 )
 
             trained_model = train_v11(
@@ -241,7 +250,9 @@ class ComprehensiveTSBoosterExperiment:
                 dropout_p=config.get('dropout', 0.3),
                 n_freq=config.get('n_freq', 4),
                 n_boost_rounds=config.get('n_boost_rounds', 2),
-                expert_type=config.get('expert_type', 'cnn')
+                expert_type=config.get('expert_type', 'cnn'),
+                expert_gate=config.get('expert_gate', 'snr'),
+                enrich_mode=config.get('enrich_mode', 'trend'),
             )
             boosted_trained = train_v11(
                 train_loader, val_loader, test_loader,

@@ -1,10 +1,10 @@
 """
-模型配置文件
-集中管理所有模型超參數，單一來源 (Single Source of Truth)
+Model Configuration
+Single Source of Truth for all model hyperparameters.
 """
 
 BEST_STAGE3_CONFIG = {
-    # --- 模型架構參數 (Model Architecture) ---
+    # --- Model Architecture ---
     "expert_hidden_dim": 32,
     "decomp_kernels": [7, 13],
     "expert_kernels": [3, 5, 7],
@@ -16,12 +16,16 @@ BEST_STAGE3_CONFIG = {
     # --- Multi-Round Boosting ---
     "n_boost_rounds": 2,
 
-    # --- 訓練超參數 (Training Hyperparameters) ---
+    # --- Enrichment (TS-Booster specific) ---
+    "expert_gate": "snr",         # SNR-based adaptive gate
+    "enrich_mode": "trend",       # trend enrichment (not seasonal)
+
+    # --- Training Hyperparameters ---
     "lr": 0.001,
     "weight_decay": 0.0001,
     "dir_weight": 0.5,
 
-    # --- 架構選項 ---
+    # --- Architecture ---
     "backbone_type": 'linear',
     "expert_type": 'cnn',
 }

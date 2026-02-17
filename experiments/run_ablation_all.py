@@ -6,7 +6,11 @@ sys.path.append(str(Path(__file__).parent.parent))
 from experiments.comprehensive_evaluation import ComprehensiveTSBoosterExperiment, set_random_seed
 
 DATASETS = [
+    # TWD FX
     "USD_TWD", "JPY_TWD", "KRW_TWD", "CAD_TWD", "CNY_TWD", "EUR_TWD", "THB_TWD",
+    # International FX
+    "EUR_USD", "GBP_USD", "USD_JPY",
+    # Taiwan Stocks
     "0050_TW", "2317_TW", "2330_TW", "2454_TW", "2603_TW", "2881_TW",
 ]
 
