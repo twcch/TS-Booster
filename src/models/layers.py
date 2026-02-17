@@ -73,12 +73,35 @@ class MultiScaleExpert(nn.Module):
         return out
 
 
+class MLPExpert(nn.Module):
+    """Simple MLP Expert - more robust to noisy inputs than CNN."""
+    def __init__(self, seq_len, pred_len, input_channels, hidden_dim=32, dropout_p=0.3, **kwargs):
+        super().__init__()
+        self.pred_len = pred_len
+        flat_dim = seq_len * input_channels
+        self.net = nn.Sequential(
+            nn.Linear(flat_dim, hidden_dim * 2),
+            nn.LeakyReLU(0.1),
+            nn.Dropout(dropout_p),
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.LeakyReLU(0.1),
+            nn.Dropout(dropout_p),
+            nn.Linear(hidden_dim, pred_len),
+        )
+
+    def forward(self, x):
+        B = x.shape[0]
+        return self.net(x.reshape(B, -1))
+
+
 def create_expert(expert_type, seq_len, pred_len, input_channels, hidden_dim=32, kernels=[3, 5, 7], dropout_p=0.3):
     """Factory function to create expert."""
     if expert_type == 'cnn':
         return MultiScaleExpert(seq_len, pred_len, input_channels, hidden_dim, kernels, dropout_p)
+    elif expert_type == 'mlp':
+        return MLPExpert(seq_len, pred_len, input_channels, hidden_dim, dropout_p)
     else:
-        raise ValueError(f"Unknown expert_type: {expert_type}. Choose 'cnn'.")
+        raise ValueError(f"Unknown expert_type: {expert_type}. Choose 'cnn' or 'mlp'.")
 
 
 # === Backbones ===

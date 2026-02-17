@@ -23,7 +23,6 @@ show_usage() {
     echo "選項:"
     echo "  --ablation FILE       - 指定 Ablation 結果檔案"
     echo "  --cross-backbone FILE - 指定 Cross-Backbone 結果檔案"
-    echo "  --oracle              - 顯示 Oracle 分析報告"
     echo "  --latest              - 自動使用最新的結果檔案 (預設)"
     echo "  --all                 - 視覺化所有結果"
     echo ""
@@ -57,7 +56,6 @@ ABLATION_FILES=()
 ABLATION_FILE=""
 CROSS_BACKBONE_FILE=""
 VISUALIZE_ALL=false
-SHOW_ORACLE=false
 
 # 解析選項
 while [[ $# -gt 0 ]]; do
@@ -74,10 +72,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --latest)
             USE_LATEST=true
-            shift
-            ;;
-        --oracle)
-            SHOW_ORACLE=true
             shift
             ;;
         --all)
@@ -205,25 +199,6 @@ if [ "$HAS_CROSS_BACKBONE" = true ]; then
     echo ""
 fi
 
-# 顯示 Oracle 分析 (如果請求)
-if [ "$SHOW_ORACLE" = true ]; then
-    echo -e "${YELLOW}📊 Oracle 分析報告${NC}"
-    echo ""
-
-    ORACLE_REPORT=$(find_latest_file "oracle_analysis_*.md")
-
-    if [ -n "$ORACLE_REPORT" ] && [ -f "$ORACLE_REPORT" ]; then
-        echo -e "${GREEN}✓${NC} 找到 Oracle 分析: $(basename $ORACLE_REPORT)"
-        echo ""
-        cat "$ORACLE_REPORT"
-        echo ""
-    else
-        echo -e "${YELLOW}⚠ 找不到 Oracle 分析報告${NC}"
-        echo "請先運行: ./run_experiment.sh oracle"
-        echo ""
-    fi
-fi
-
 # 顯示完成訊息
 echo -e "${GREEN}=================================="
 echo "✅ 視覺化完成!"
@@ -246,6 +221,4 @@ if [ "$HAS_CROSS_BACKBONE" = true ]; then
     echo "  cat $CROSS_BACKBONE_REPORT"
 fi
 echo ""
-echo "查看 Oracle 分析:"
-echo "  ./visualize_results.sh --oracle"
 echo ""
