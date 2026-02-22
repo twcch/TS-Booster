@@ -24,6 +24,9 @@ BEST_STAGE3_CONFIG = {
     "lr": 0.001,
     "weight_decay": 0.0001,
     "dir_weight": 0.5,
+    "fixed_loss_weights": True,       # Fixed > Adaptive (ablation verified)
+    "fixed_aux_weight": 0.3,          # Expert residual loss weight
+    "fixed_base_weight": 0.1,         # Backbone auxiliary loss weight
 
     # --- Architecture ---
     "backbone_type": 'linear',

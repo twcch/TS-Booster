@@ -99,9 +99,13 @@ def train_v11(
 
                 base_loss = F.mse_loss(y_base_out, y)
 
-                weights = adaptive_scheduler.get_weights(epoch)
-                aux_weight = weights['aux']
-                base_weight = weights['base']
+                if config.get('fixed_loss_weights'):
+                    aux_weight = config.get('fixed_aux_weight', 0.3)
+                    base_weight = config.get('fixed_base_weight', 0.1)
+                else:
+                    weights = adaptive_scheduler.get_weights(epoch)
+                    aux_weight = weights['aux']
+                    base_weight = weights['base']
 
                 loss = loss + aux_weight * aux_loss + base_weight * base_loss
                 aux_losses.append((aux_loss.item(), aux_weight, base_loss.item(), base_weight))
