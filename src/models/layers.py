@@ -4,13 +4,12 @@ import torch.nn as nn
 
 # === Decomposition ===
 
+
 class FixedMovingAvg(nn.Module):
     def __init__(self, kernel_size):
         super().__init__()
         self.avg_pool = nn.AvgPool1d(
-            kernel_size=kernel_size,
-            stride=1,
-            padding=(kernel_size - 1) // 2
+            kernel_size=kernel_size, stride=1, padding=(kernel_size - 1) // 2
         )
 
     def forward(self, x):
@@ -23,6 +22,7 @@ class FixedMovingAvg(nn.Module):
 
 class MultiScaleDecomp(nn.Module):
     """Learnable weighted ensemble of moving averages for adaptive decomposition."""
+
     def __init__(self, kernels=[7, 13]):
         super().__init__()
         self.kernels = kernels
@@ -39,25 +39,39 @@ class MultiScaleDecomp(nn.Module):
 
 # === Experts ===
 
+
 class MultiScaleExpert(nn.Module):
     """
     Inception-style Multi-Scale CNN Expert.
     Multiple parallel conv branches with different kernel sizes, features concatenated.
     Outputs [B, pred_len] directly (single-target prediction).
     """
-    def __init__(self, seq_len, pred_len, input_channels, hidden_dim=32, kernels=[3, 5, 7], dropout_p=0.3):
+
+    def __init__(
+        self,
+        seq_len,
+        pred_len,
+        input_channels,
+        hidden_dim=32,
+        kernels=[3, 5, 7],
+        dropout_p=0.3,
+    ):
         super().__init__()
         self.pred_len = pred_len
         branch_dim = hidden_dim // len(kernels)
 
         self.branches = nn.ModuleList()
         for k in kernels:
-            self.branches.append(nn.Sequential(
-                nn.Conv1d(input_channels, branch_dim, kernel_size=k, padding=(k-1)//2),
-                nn.BatchNorm1d(branch_dim),
-                nn.LeakyReLU(0.1),
-                nn.Dropout(dropout_p),
-            ))
+            self.branches.append(
+                nn.Sequential(
+                    nn.Conv1d(
+                        input_channels, branch_dim, kernel_size=k, padding=(k - 1) // 2
+                    ),
+                    nn.BatchNorm1d(branch_dim),
+                    nn.LeakyReLU(0.1),
+                    nn.Dropout(dropout_p),
+                )
+            )
 
         concat_dim = branch_dim * len(kernels)
         self.fc = nn.Linear(seq_len * concat_dim, pred_len)
@@ -75,7 +89,10 @@ class MultiScaleExpert(nn.Module):
 
 class MLPExpert(nn.Module):
     """Simple MLP Expert - more robust to noisy inputs than CNN."""
-    def __init__(self, seq_len, pred_len, input_channels, hidden_dim=32, dropout_p=0.3, **kwargs):
+
+    def __init__(
+        self, seq_len, pred_len, input_channels, hidden_dim=32, dropout_p=0.3, **kwargs
+    ):
         super().__init__()
         self.pred_len = pred_len
         flat_dim = seq_len * input_channels
@@ -94,11 +111,21 @@ class MLPExpert(nn.Module):
         return self.net(x.reshape(B, -1))
 
 
-def create_expert(expert_type, seq_len, pred_len, input_channels, hidden_dim=32, kernels=[3, 5, 7], dropout_p=0.3):
+def create_expert(
+    expert_type,
+    seq_len,
+    pred_len,
+    input_channels,
+    hidden_dim=32,
+    kernels=[3, 5, 7],
+    dropout_p=0.3,
+):
     """Factory function to create expert."""
-    if expert_type == 'cnn':
-        return MultiScaleExpert(seq_len, pred_len, input_channels, hidden_dim, kernels, dropout_p)
-    elif expert_type == 'mlp':
+    if expert_type == "cnn":
+        return MultiScaleExpert(
+            seq_len, pred_len, input_channels, hidden_dim, kernels, dropout_p
+        )
+    elif expert_type == "mlp":
         return MLPExpert(seq_len, pred_len, input_channels, hidden_dim, dropout_p)
     else:
         raise ValueError(f"Unknown expert_type: {expert_type}. Choose 'cnn' or 'mlp'.")
@@ -106,8 +133,10 @@ def create_expert(expert_type, seq_len, pred_len, input_channels, hidden_dim=32,
 
 # === Backbones ===
 
+
 class LinearBackbone(nn.Module):
     """Simple Linear Backbone (DLinear-style)."""
+
     def __init__(self, seq_len, input_channels, pred_len, hidden_dim=64, num_layers=1):
         super().__init__()
         self.flatten_dim = seq_len * input_channels
@@ -133,8 +162,13 @@ class LinearBackbone(nn.Module):
 class LSTMBackbone(nn.Module):
     def __init__(self, seq_len, input_channels, pred_len, hidden_dim=64, num_layers=2):
         super().__init__()
-        self.lstm = nn.LSTM(input_channels, hidden_dim, num_layers=num_layers,
-                            batch_first=True, dropout=0.2)
+        self.lstm = nn.LSTM(
+            input_channels,
+            hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=0.2,
+        )
         self.fc = nn.Linear(hidden_dim, pred_len)
 
     def forward(self, x):
@@ -146,8 +180,13 @@ class LSTMBackbone(nn.Module):
 class GRUBackbone(nn.Module):
     def __init__(self, seq_len, input_channels, pred_len, hidden_dim=64, num_layers=2):
         super().__init__()
-        self.gru = nn.GRU(input_channels, hidden_dim, num_layers=num_layers,
-                          batch_first=True, dropout=0.2)
+        self.gru = nn.GRU(
+            input_channels,
+            hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=0.2,
+        )
         self.fc = nn.Linear(hidden_dim, pred_len)
 
     def forward(self, x):
@@ -161,8 +200,11 @@ class TransformerBackbone(nn.Module):
         super().__init__()
         self.input_proj = nn.Linear(input_channels, hidden_dim)
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_dim, nhead=4, dim_feedforward=hidden_dim*2,
-            dropout=0.1, batch_first=True
+            d_model=hidden_dim,
+            nhead=4,
+            dim_feedforward=hidden_dim * 2,
+            dropout=0.1,
+            batch_first=True,
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.fc = nn.Linear(hidden_dim, pred_len)

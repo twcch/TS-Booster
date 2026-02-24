@@ -46,7 +46,6 @@ def create_model_pair(config, seq_len, pred_len, input_channels):
         expert_kernels=config.get("expert_kernels", [3, 5, 7]),
         expert_hidden_dim=config.get("expert_hidden_dim", 32),
         dropout_p=config.get("dropout", 0.3),
-        n_freq=config.get("n_freq", 4),
         n_boost_rounds=config.get("n_boost_rounds", 2),
         expert_type=config.get("expert_type", "cnn"),
         expert_gate=config.get("expert_gate", "snr"),

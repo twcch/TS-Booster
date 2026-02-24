@@ -205,7 +205,7 @@ def train_v11(
     if verbose:
         print(f"\n[Training Completed] Loading best model (Val Loss: {best_val_loss:.4f})...")
 
-        if hasattr(model, 'toggle_dnas_mode'):
+        if hasattr(model, 'experts'):
             summary = adaptive_scheduler.get_summary()
             print("\n[Adaptive Loss Summary]")
             print(f"  Best Losses - Overall: {summary['best_overall']:.4f}, Base: {summary['best_base']:.4f}, Expert: {summary['best_expert']:.4f}")
