@@ -10,9 +10,6 @@ BEST_STAGE3_CONFIG = {
     "expert_kernels": [3, 5, 7],
     "dropout": 0.3,
 
-    # --- Frequency Feature ---
-    "n_freq": 4,
-
     # --- Multi-Round Boosting ---
     "n_boost_rounds": 2,
 
