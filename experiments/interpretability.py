@@ -44,6 +44,7 @@ CATEGORIES = {
 
 SEED = 42
 OUT_DIR = Path("experiments/comprehensive_results/interpretability")
+FIGURES_DIR = OUT_DIR / "figures"
 
 RESULTS_PATH = OUT_DIR / "interpretability_results.json"
 
@@ -225,8 +226,8 @@ def plot_decomp_weights(all_results):
     fx_end = stock_end + sum(1 for d in ALL_DATASETS[6:13] if d in all_results)
 
     plt.tight_layout()
-    plt.savefig(OUT_DIR / "decomp_weights.png", dpi=150, bbox_inches='tight')
-    plt.savefig(OUT_DIR / "decomp_weights.pdf", bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / "decomp_weights.png", dpi=150, bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / "decomp_weights.pdf", bbox_inches='tight')
     plt.close()
     print("  Saved: decomp_weights.png/pdf")
 
@@ -273,8 +274,8 @@ def plot_snr_gate_params(all_results):
     ax1.legend(handles=legend_elements, fontsize=10)
 
     plt.tight_layout()
-    plt.savefig(OUT_DIR / "snr_gate_params.png", dpi=150, bbox_inches='tight')
-    plt.savefig(OUT_DIR / "snr_gate_params.pdf", bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / "snr_gate_params.png", dpi=150, bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / "snr_gate_params.pdf", bbox_inches='tight')
     plt.close()
     print("  Saved: snr_gate_params.png/pdf")
 
@@ -317,8 +318,8 @@ def plot_gate_distributions(all_results):
     ax.legend(handles=legend_elements, fontsize=10, loc='upper right')
 
     plt.tight_layout()
-    plt.savefig(OUT_DIR / "gate_distributions.png", dpi=150, bbox_inches='tight')
-    plt.savefig(OUT_DIR / "gate_distributions.pdf", bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / "gate_distributions.png", dpi=150, bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / "gate_distributions.pdf", bbox_inches='tight')
     plt.close()
     print("  Saved: gate_distributions.png/pdf")
 
@@ -357,13 +358,13 @@ def plot_prediction_curves(all_results, showcase_datasets=None):
         ax.plot(x_axis, booster_1, color='#2196F3', linewidth=1.0, label='TS-Booster', alpha=0.7)
 
         ax.set_xlabel('Test Sample Index', fontsize=11)
-        ax.set_ylabel('Price', fontsize=11)
+        ax.set_ylabel('Annualized Volatility (%)', fontsize=11)
         ax.set_title(f'{ds} — Prediction Comparison (1-step ahead)', fontsize=13)
         ax.legend(fontsize=10)
 
         plt.tight_layout()
-        plt.savefig(OUT_DIR / f"pred_curve_{ds}.png", dpi=150, bbox_inches='tight')
-        plt.savefig(OUT_DIR / f"pred_curve_{ds}.pdf", bbox_inches='tight')
+        plt.savefig(FIGURES_DIR / f"pred_curve_{ds}.png", dpi=150, bbox_inches='tight')
+        plt.savefig(FIGURES_DIR / f"pred_curve_{ds}.pdf", bbox_inches='tight')
         plt.close()
         print(f"  Saved: pred_curve_{ds}.png/pdf")
 
@@ -412,8 +413,8 @@ def plot_gate_vs_improvement(all_results):
     ax.axhline(y=0, color='gray', linestyle='--', alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(OUT_DIR / "gate_vs_improvement.png", dpi=150, bbox_inches='tight')
-    plt.savefig(OUT_DIR / "gate_vs_improvement.pdf", bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / "gate_vs_improvement.png", dpi=150, bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / "gate_vs_improvement.pdf", bbox_inches='tight')
     plt.close()
     print("  Saved: gate_vs_improvement.png/pdf")
 
@@ -461,6 +462,7 @@ def print_summary_table(all_results):
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
     # Check for saved results
     if RESULTS_PATH.exists():

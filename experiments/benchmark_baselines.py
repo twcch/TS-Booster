@@ -22,6 +22,9 @@ import pandas as pd
 from pathlib import Path
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import StandardScaler
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -37,8 +40,9 @@ CATEGORIES = {
     "International FX": ["EUR_USD", "GBP_USD", "USD_JPY"],
 }
 
-DL_RESULTS_PATH = Path("experiments/comprehensive_results/statistical_test_results.json")
+DL_RESULTS_PATH = Path("experiments/comprehensive_results/main_experiment/statistical_test_results.json")
 RESULTS_PATH = Path("experiments/comprehensive_results/benchmark/benchmark_baselines_results.json")
+FIGURES_DIR = Path("experiments/comprehensive_results/benchmark/figures")
 
 LOOKBACK = 30
 HORIZON = 3
@@ -489,6 +493,145 @@ def analyze(results):
     print(r"\end{table}")
 
 
+# ──────────────────────────────────────────────────────────────
+# Figures
+# ──────────────────────────────────────────────────────────────
+
+FX_DATASETS = ["USD_TWD", "JPY_TWD", "KRW_TWD", "CAD_TWD", "CNY_TWD", "EUR_TWD", "THB_TWD",
+               "EUR_USD", "GBP_USD", "USD_JPY"]
+
+
+def plot_tsb_vs_best_baseline(results):
+    """Horizontal bar: TSB RMSE improvement % over best external baseline per dataset."""
+    methods_ext = ["ARIMA", "XGBoost", "LightGBM"]
+
+    datasets, diffs, colors, best_names = [], [], [], []
+    for ds in ALL_DATASETS:
+        if ds not in results or "Linear+TSB" not in results[ds]:
+            continue
+        tsb = results[ds]["Linear+TSB"]
+        ext_rmse = {}
+        for m in methods_ext:
+            if m in results[ds] and results[ds][m] is not None:
+                ext_rmse[m] = results[ds][m]
+        if not ext_rmse:
+            continue
+        best_m = min(ext_rmse, key=lambda k: ext_rmse[k])
+        best_val = ext_rmse[best_m]
+        gap = (best_val - tsb) / best_val * 100  # positive = TSB wins
+        datasets.append(ds)
+        diffs.append(gap)
+        colors.append('#43A047' if gap > 0 else '#E53935')
+        best_names.append(best_m)
+
+    fig, ax = plt.subplots(figsize=(12, 7))
+    y = np.arange(len(datasets))
+    bars = ax.barh(y, diffs, color=colors, edgecolor='white', linewidth=0.5, height=0.7)
+
+    # All labels outside bars
+    for i, (bar, diff, bm) in enumerate(zip(bars, diffs, best_names)):
+        w = bar.get_width()
+        label = f'{diff:+.1f}%'
+        if w >= 0:
+            ax.text(w + 0.4, i, label,
+                    ha='left', va='center', fontsize=9, fontweight='bold')
+        else:
+            ax.text(w - 0.4, i, label,
+                    ha='right', va='center', fontsize=9, fontweight='bold')
+
+    ax.axvline(x=0, color='#424242', linewidth=1)
+
+    # FX / Stocks separator
+    n_fx = len([d for d in datasets if d in FX_DATASETS])
+    if 0 < n_fx < len(datasets):
+        ax.axhline(y=n_fx - 0.5, color='#424242', linewidth=1, linestyle='--', alpha=0.5)
+
+    wins = sum(1 for d in diffs if d > 0)
+    # Add enough padding for labels
+    max_val = max(diffs) if diffs else 10
+    min_val = min(diffs) if diffs else -10
+    ax.set_xlim(min_val - 5, max_val + 6)
+
+    ax.set_xlabel('RMSE Improvement over Best External Baseline (%)', fontsize=11)
+    ax.set_title(f'Linear+TSB vs Best Baseline: RMSE Comparison ({wins}/{len(diffs)} wins)',
+                 fontsize=13, fontweight='bold')
+    ax.set_yticks(y)
+    ax.set_yticklabels(datasets, fontsize=10)
+    ax.invert_yaxis()
+    ax.grid(axis='x', alpha=0.3)
+
+    plt.tight_layout()
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    plt.savefig(FIGURES_DIR / 'tsb_vs_best_baseline.png', dpi=200, bbox_inches='tight', facecolor='white')
+    plt.savefig(FIGURES_DIR / 'tsb_vs_best_baseline.pdf', bbox_inches='tight', facecolor='white')
+    plt.close()
+    print("  Saved: tsb_vs_best_baseline.png/pdf")
+
+
+def plot_average_rank(results):
+    """Bar chart: average rank of each method across 16 datasets."""
+    methods = ["ARIMA", "XGBoost", "LightGBM", "Linear", "Linear+TSB"]
+    method_colors = ["#9E9E9E", "#FF7043", "#66BB6A", "#42A5F5", "#AB47BC"]
+
+    ranks_per_method = {m: [] for m in methods}
+    for ds in ALL_DATASETS:
+        if ds not in results:
+            continue
+        available = {}
+        for m in methods:
+            if m in results[ds] and results[ds][m] is not None:
+                available[m] = results[ds][m]
+        if not available:
+            continue
+        sorted_methods = sorted(available, key=lambda k: available[k])
+        for rank, m in enumerate(sorted_methods, 1):
+            ranks_per_method[m].append(rank)
+
+    avg_ranks = []
+    labels = []
+    bar_colors = []
+    for m, c in zip(methods, method_colors):
+        if ranks_per_method[m]:
+            avg_ranks.append(np.mean(ranks_per_method[m]))
+            labels.append(m)
+            bar_colors.append(c)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    x = np.arange(len(labels))
+    bars = ax.bar(x, avg_ranks, color=bar_colors, edgecolor='#37474F', linewidth=0.8, width=0.6)
+
+    for bar, rank in zip(bars, avg_ranks):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
+                f'{rank:.2f}', ha='center', va='bottom', fontsize=11, fontweight='bold')
+
+    ax.set_xlabel('Method', fontsize=11)
+    ax.set_ylabel('Average Rank (lower = better)', fontsize=11)
+    ax.set_title('Average RMSE Rank Across 16 Datasets', fontsize=13, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=10)
+    ax.set_ylim(0, max(avg_ranks) + 0.8)
+    ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    plt.savefig(FIGURES_DIR / 'average_rank.png', dpi=200, bbox_inches='tight', facecolor='white')
+    plt.savefig(FIGURES_DIR / 'average_rank.pdf', bbox_inches='tight', facecolor='white')
+    plt.close()
+    print("  Saved: average_rank.png/pdf")
+
+
+def generate_figures(results):
+    """Generate all benchmark figures."""
+    print("\nGenerating figures...")
+    plot_tsb_vs_best_baseline(results)
+    plot_average_rank(results)
+    print(f"Figures saved to {FIGURES_DIR}/")
+
+
+# ──────────────────────────────────────────────────────────────
+# Entry Point
+# ──────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark baselines for TS-Booster paper")
     parser.add_argument("--analyze", action="store_true", help="Only analyze saved results")
@@ -505,3 +648,4 @@ if __name__ == "__main__":
         results = run_experiments(args)
 
     analyze(results)
+    generate_figures(results)

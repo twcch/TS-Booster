@@ -14,6 +14,9 @@ import sys, random, json
 import numpy as np
 import torch
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent))
@@ -33,6 +36,7 @@ ALL_DATASETS = [
 
 SEEDS = [42, 123, 456]
 RESULTS_PATH = Path("experiments/comprehensive_results/ablation/ablation_adaptive_loss.json")
+FIGURES_DIR = Path("experiments/comprehensive_results/ablation/figures")
 
 
 def set_seed(seed):
@@ -164,5 +168,101 @@ def main():
     print(f"  Overall diff: {diff_overall:+.2f}% ({'Adaptive' if diff_overall > 0 else 'Fixed'} is better)")
 
 
+def plot_fixed_vs_adaptive(results):
+    """Paired bar chart: Fixed vs Adaptive RMSE per dataset."""
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+
+    datasets = [ds for ds in ALL_DATASETS if ds in results]
+    adaptive_means = [np.mean(results[ds]["adaptive"]) for ds in datasets]
+    fixed_means = [np.mean(results[ds]["fixed"]) for ds in datasets]
+    adaptive_stds = [np.std(results[ds]["adaptive"]) for ds in datasets]
+    fixed_stds = [np.std(results[ds]["fixed"]) for ds in datasets]
+
+    # Compute improvement: negative = Fixed is better (lower RMSE)
+    diffs = [(f - a) / f * 100 for a, f in zip(adaptive_means, fixed_means)]
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    x = np.arange(len(datasets))
+
+    colors = ['#4CAF50' if d < 0 else '#EF5350' for d in diffs]
+    bars = ax.bar(x, diffs, color=colors, edgecolor='white', width=0.6)
+
+    ax.axhline(y=0, color='black', linewidth=0.8)
+    ax.set_xticks(x)
+    ax.set_xticklabels(datasets, rotation=45, ha='right', fontsize=9)
+    ax.set_ylabel('RMSE Difference (%)', fontsize=11)
+    ax.set_title('Fixed vs Adaptive Loss Weights (negative = Fixed is better)', fontsize=13)
+
+    # Add value labels
+    for i, (bar, val) in enumerate(zip(bars, diffs)):
+        y_pos = val + 0.05 if val >= 0 else val - 0.05
+        va = 'bottom' if val >= 0 else 'top'
+        ax.text(i, y_pos, f'{val:+.2f}%', ha='center', va=va, fontsize=8)
+
+    # Win count annotation
+    fixed_wins = sum(1 for d in diffs if d < 0)
+    ax.text(0.98, 0.95, f'Fixed wins: {fixed_wins}/{len(datasets)}',
+            transform=ax.transAxes, ha='right', va='top', fontsize=11,
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='#E8F5E9', alpha=0.8))
+
+    plt.tight_layout()
+    plt.savefig(FIGURES_DIR / "fixed_vs_adaptive.png", dpi=150, bbox_inches='tight')
+    plt.savefig(FIGURES_DIR / "fixed_vs_adaptive.pdf", bbox_inches='tight')
+    plt.close()
+    print("  Saved: fixed_vs_adaptive.png/pdf")
+
+
+def analyze():
+    """Load saved results, print summary, and generate figures."""
+    if not RESULTS_PATH.exists():
+        print(f"No results found at {RESULTS_PATH}. Run the experiment first.")
+        return
+
+    with open(RESULTS_PATH) as f:
+        results = json.load(f)
+
+    # Print summary table
+    print(f"\n{'='*80}")
+    print("ABLATION: Adaptive Scheduler vs Fixed Weights")
+    print(f"{'='*80}")
+    print(f"{'Dataset':<12} | {'Adaptive RMSE':>14} | {'Fixed RMSE':>14} | {'Diff':>8} | {'Better':>8}")
+    print("-" * 65)
+
+    adapt_wins = 0
+    for ds in ALL_DATASETS:
+        if ds not in results:
+            continue
+        a = np.mean(results[ds]["adaptive"])
+        f = np.mean(results[ds]["fixed"])
+        diff = (f - a) / f * 100
+        better = "Adaptive" if a < f else "Fixed"
+        if a < f:
+            adapt_wins += 1
+        print(f"  {ds:<12} | {a:>14.6f} | {f:>14.6f} | {diff:>+7.2f}% | {better:>8}")
+
+    print("-" * 65)
+    print(f"  Adaptive wins: {adapt_wins}/{len([ds for ds in ALL_DATASETS if ds in results])}")
+    avg_a = np.mean([np.mean(results[ds]["adaptive"]) for ds in ALL_DATASETS if ds in results])
+    avg_f = np.mean([np.mean(results[ds]["fixed"]) for ds in ALL_DATASETS if ds in results])
+    print(f"  Overall avg — Adaptive: {avg_a:.6f}, Fixed: {avg_f:.6f}")
+    diff_overall = (avg_f - avg_a) / avg_f * 100
+    print(f"  Overall diff: {diff_overall:+.2f}% ({'Adaptive' if diff_overall > 0 else 'Fixed'} is better)")
+
+    # Generate figure
+    plot_fixed_vs_adaptive(results)
+
+
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--analyze", action="store_true", help="Analyze saved results only")
+    args = parser.parse_args()
+
+    if args.analyze:
+        analyze()
+    else:
+        main()
+        # Generate figure after full run
+        with open(RESULTS_PATH) as f:
+            results = json.load(f)
+        plot_fixed_vs_adaptive(results)

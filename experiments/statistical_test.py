@@ -22,6 +22,9 @@ import torch
 import pandas as pd
 from pathlib import Path
 from scipy import stats
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -41,6 +44,7 @@ ALL_DATASETS = [
 SEEDS = [42, 123, 456, 789, 2024]
 
 RESULTS_PATH = Path("experiments/comprehensive_results/main_experiment/statistical_test_results.json")
+FIGURES_DIR = Path("experiments/comprehensive_results/main_experiment/figures")
 
 
 def set_seed(seed):
@@ -351,6 +355,94 @@ def analyze(results):
     print(r"\end{table}")
 
 
+# ──────────────────────────────────────────────────────────────
+# Figures
+# ──────────────────────────────────────────────────────────────
+
+FX_DATASETS = ["USD_TWD", "JPY_TWD", "KRW_TWD", "CAD_TWD", "CNY_TWD", "EUR_TWD", "THB_TWD",
+               "EUR_USD", "GBP_USD", "USD_JPY"]
+
+
+def plot_improvement_bars(results):
+    """Bar chart: RMSE improvement % per dataset with 5-seed error bars and p-value stars."""
+    datasets = [ds for ds in ALL_DATASETS if ds in results and len(results[ds]["vanilla"]) > 0]
+
+    means, stds, sigs = [], [], []
+    for ds in datasets:
+        v = np.array(results[ds]["vanilla"])
+        b = np.array(results[ds]["booster"])
+        gaps = (v - b) / v * 100
+        means.append(np.mean(gaps))
+        stds.append(np.std(gaps, ddof=1))
+        # p-value for significance marker
+        t_stat, p_two = stats.ttest_rel(v, b)
+        p_one = p_two / 2 if t_stat > 0 else 1 - p_two / 2
+        sigs.append('**' if p_one < 0.01 else '*' if p_one < 0.05 else '')
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+    x = np.arange(len(datasets))
+    colors = ['#43A047' if m > 0 else '#E53935' for m in means]
+
+    bars = ax.bar(x, means, yerr=stds, capsize=3, color=colors,
+                  edgecolor='white', linewidth=0.5, width=0.7,
+                  error_kw={'linewidth': 1, 'color': '#424242'})
+
+    # Add significance stars and value labels
+    for i, (bar, mean, std, sig) in enumerate(zip(bars, means, stds, sigs)):
+        h = bar.get_height()
+        # Value label
+        ax.text(bar.get_x() + bar.get_width() / 2, h + std + 0.5,
+                f'{mean:+.1f}%', ha='center', va='bottom', fontsize=8, fontweight='bold')
+        # Significance star
+        if sig:
+            ax.text(bar.get_x() + bar.get_width() / 2, h + std + 2.0,
+                    sig, ha='center', va='bottom', fontsize=9, color='#1565C0')
+
+    ax.axhline(y=0, color='#9E9E9E', linewidth=0.8, linestyle='-')
+
+    # FX / Stocks separator
+    n_fx = len([d for d in datasets if d in FX_DATASETS])
+    if 0 < n_fx < len(datasets):
+        ax.axvline(x=n_fx - 0.5, color='#424242', linewidth=1.5, linestyle='--', alpha=0.5)
+        ax.text(n_fx / 2 - 0.5, ax.get_ylim()[1] * 0.92, 'FX',
+                ha='center', fontsize=10, fontweight='bold', color='#1565C0')
+        ax.text(n_fx + (len(datasets) - n_fx) / 2 - 0.5, ax.get_ylim()[1] * 0.92, 'Stocks',
+                ha='center', fontsize=10, fontweight='bold', color='#C62828')
+
+    # Overall summary
+    overall_mean = np.mean(means)
+    ax.axhline(y=overall_mean, color='#1565C0', linewidth=1, linestyle=':', alpha=0.7)
+    ax.text(len(datasets) - 0.5, overall_mean + 0.5,
+            f'avg: {overall_mean:+.1f}%', ha='right', fontsize=9, color='#1565C0', fontstyle='italic')
+
+    ax.set_xlabel('Dataset', fontsize=11)
+    ax.set_ylabel('RMSE Improvement (%)', fontsize=11)
+    ax.set_title('TS-Booster vs Vanilla Linear: RMSE Improvement (5 seeds, error bars = 1 std)\n'
+                 '** p < 0.01 (paired t-test)',
+                 fontsize=12, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(datasets, rotation=45, ha='right', fontsize=9)
+    ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    plt.savefig(FIGURES_DIR / 'rmse_improvement.png', dpi=200, bbox_inches='tight', facecolor='white')
+    plt.savefig(FIGURES_DIR / 'rmse_improvement.pdf', bbox_inches='tight', facecolor='white')
+    plt.close()
+    print("  Saved: rmse_improvement.png/pdf")
+
+
+def generate_figures(results):
+    """Generate all main experiment figures."""
+    print("\nGenerating figures...")
+    plot_improvement_bars(results)
+    print(f"Figures saved to {FIGURES_DIR}/")
+
+
+# ──────────────────────────────────────────────────────────────
+# Entry Point
+# ──────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--analyze", action="store_true", help="Only analyze saved results")
@@ -366,3 +458,4 @@ if __name__ == "__main__":
         results = run_experiments()
 
     analyze(results)
+    generate_figures(results)
