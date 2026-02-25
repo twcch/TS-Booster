@@ -299,7 +299,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}")
 
-    output_dir = Path('experiments/comprehensive_results/figures')
+    output_dir = Path('experiments/comprehensive_results/cross_backbone/figures')
     output_dir.mkdir(parents=True, exist_ok=True)
 
     all_results = {}
@@ -316,7 +316,7 @@ if __name__ == "__main__":
             print(f"  Saved figure: cross_backbone_{ds}.png")
 
     # Save raw results
-    with open(output_dir.parent / 'cross_backbone_all_results.json', 'w') as f:
+    with open(output_dir.parent / 'cross_backbone_all_results.json', 'w') as f:  # saves to cross_backbone/
         json.dump(all_results, f, indent=2)
     print("\nSaved raw results to cross_backbone_all_results.json")
 

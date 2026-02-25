@@ -1,0 +1,354 @@
+{
+  "USD_TWD": {
+    "Linear": {
+      "vanilla_rmse": 1.8077748001212606,
+      "boosted_rmse": 1.5279285714304032,
+      "improvement": 15.480148781368458
+    },
+    "LSTM": {
+      "vanilla_rmse": 2.4657550594182815,
+      "boosted_rmse": 1.9051575720498344,
+      "improvement": 22.735327470065204
+    },
+    "GRU": {
+      "vanilla_rmse": 2.486735731706532,
+      "boosted_rmse": 2.1487685052102723,
+      "improvement": 13.590797855481352
+    },
+    "Transformer": {
+      "vanilla_rmse": 2.6992999373076967,
+      "boosted_rmse": 1.684572804015888,
+      "improvement": 37.59223342567501
+    }
+  },
+  "JPY_TWD": {
+    "Linear": {
+      "vanilla_rmse": 2.4136352470737052,
+      "boosted_rmse": 2.0246199731118546,
+      "improvement": 16.117401104143358
+    },
+    "LSTM": {
+      "vanilla_rmse": 2.450140258037791,
+      "boosted_rmse": 2.145359485027199,
+      "improvement": 12.43931942307162
+    },
+    "GRU": {
+      "vanilla_rmse": 2.251981184185185,
+      "boosted_rmse": 2.1798093340660354,
+      "improvement": 3.204815858408828
+    },
+    "Transformer": {
+      "vanilla_rmse": 2.7539938516039433,
+      "boosted_rmse": 2.2729441852300547,
+      "improvement": 17.46734714363005
+    }
+  },
+  "KRW_TWD": {
+    "Linear": {
+      "vanilla_rmse": 1.8176084879308727,
+      "boosted_rmse": 1.694757672584708,
+      "improvement": 6.758926147292341
+    },
+    "LSTM": {
+      "vanilla_rmse": 2.289359336533312,
+      "boosted_rmse": 1.879974008475109,
+      "improvement": 17.882091357406534
+    },
+    "GRU": {
+      "vanilla_rmse": 2.2002224816762324,
+      "boosted_rmse": 1.86457821233597,
+      "improvement": 15.255014987600385
+    },
+    "Transformer": {
+      "vanilla_rmse": 1.9554101957576246,
+      "boosted_rmse": 1.7500315859993625,
+      "improvement": 10.503095984865116
+    }
+  },
+  "CAD_TWD": {
+    "Linear": {
+      "vanilla_rmse": 1.9769508240233793,
+      "boosted_rmse": 1.7320304400994473,
+      "improvement": 12.388794953709764
+    },
+    "LSTM": {
+      "vanilla_rmse": 2.165172317113878,
+      "boosted_rmse": 1.8938686603346544,
+      "improvement": 12.530349415369614
+    },
+    "GRU": {
+      "vanilla_rmse": 2.241032824420148,
+      "boosted_rmse": 2.2267237247811806,
+      "improvement": 0.6385046877958866
+    },
+    "Transformer": {
+      "vanilla_rmse": 2.6502532336477866,
+      "boosted_rmse": 2.1867284621446696,
+      "improvement": 17.489829485657314
+    }
+  },
+  "CNY_TWD": {
+    "Linear": {
+      "vanilla_rmse": 1.8601608617746213,
+      "boosted_rmse": 1.6564092178632497,
+      "improvement": 10.953442151072325
+    },
+    "LSTM": {
+      "vanilla_rmse": 2.4556805177448315,
+      "boosted_rmse": 1.681911826970673,
+      "improvement": 31.509338661233798
+    },
+    "GRU": {
+      "vanilla_rmse": 2.6487643138729107,
+      "boosted_rmse": 1.7918034711772042,
+      "improvement": 32.35323121077144
+    },
+    "Transformer": {
+      "vanilla_rmse": 2.818302728070344,
+      "boosted_rmse": 1.746466757391119,
+      "improvement": 38.03125760776939
+    }
+  },
+  "EUR_TWD": {
+    "Linear": {
+      "vanilla_rmse": 2.020928479803399,
+      "boosted_rmse": 1.7625101213582632,
+      "improvement": 12.787110530021092
+    },
+    "LSTM": {
+      "vanilla_rmse": 2.2012567301359907,
+      "boosted_rmse": 2.107879964474477,
+      "improvement": 4.2419752490998714
+    },
+    "GRU": {
+      "vanilla_rmse": 2.235846828046986,
+      "boosted_rmse": 2.151922046308791,
+      "improvement": 3.7536015743754474
+    },
+    "Transformer": {
+      "vanilla_rmse": 2.3360240713752565,
+      "boosted_rmse": 1.9589072260331333,
+      "improvement": 16.143534219667018
+    }
+  },
+  "THB_TWD": {
+    "Linear": {
+      "vanilla_rmse": 1.9776060886189828,
+      "boosted_rmse": 1.8411017059302563,
+      "improvement": 6.902506190403734
+    },
+    "LSTM": {
+      "vanilla_rmse": 1.9601580232473288,
+      "boosted_rmse": 1.79019606638198,
+      "improvement": 8.670829333635991
+    },
+    "GRU": {
+      "vanilla_rmse": 2.051881182855645,
+      "boosted_rmse": 2.0024158717062384,
+      "improvement": 2.4107298006683258
+    },
+    "Transformer": {
+      "vanilla_rmse": 2.1546862012412973,
+      "boosted_rmse": 1.8587950110619371,
+      "improvement": 13.73244930091907
+    }
+  },
+  "EUR_USD": {
+    "Linear": {
+      "vanilla_rmse": 1.5918256639701462,
+      "boosted_rmse": 1.3917662857292703,
+      "improvement": 12.567920141575751
+    },
+    "LSTM": {
+      "vanilla_rmse": 1.5350334157086538,
+      "boosted_rmse": 1.5704006018446937,
+      "improvement": -2.3040010578344607
+    },
+    "GRU": {
+      "vanilla_rmse": 1.6014671283350002,
+      "boosted_rmse": 1.533534731497787,
+      "improvement": 4.241885183609143
+    },
+    "Transformer": {
+      "vanilla_rmse": 1.6887812330849754,
+      "boosted_rmse": 1.4440707844927463,
+      "improvement": 14.490358123248747
+    }
+  },
+  "GBP_USD": {
+    "Linear": {
+      "vanilla_rmse": 1.9214995281099196,
+      "boosted_rmse": 1.6987059625389505,
+      "improvement": 11.594775971145815
+    },
+    "LSTM": {
+      "vanilla_rmse": 1.7262842090754575,
+      "boosted_rmse": 1.6757326396604157,
+      "improvement": 2.9283457005098597
+    },
+    "GRU": {
+      "vanilla_rmse": 1.7961727332306048,
+      "boosted_rmse": 1.7635583527011922,
+      "improvement": 1.8157708290534056
+    },
+    "Transformer": {
+      "vanilla_rmse": 1.9520041354170774,
+      "boosted_rmse": 1.700833353643234,
+      "improvement": 12.867328363532213
+    }
+  },
+  "USD_JPY": {
+    "Linear": {
+      "vanilla_rmse": 2.2789196759462316,
+      "boosted_rmse": 1.9381559124232581,
+      "improvement": 14.952864162774176
+    },
+    "LSTM": {
+      "vanilla_rmse": 2.1345465820981846,
+      "boosted_rmse": 1.9973038329430797,
+      "improvement": 6.429597288066683
+    },
+    "GRU": {
+      "vanilla_rmse": 2.1103074699163944,
+      "boosted_rmse": 1.9718142622737544,
+      "improvement": 6.562702810701169
+    },
+    "Transformer": {
+      "vanilla_rmse": 2.4813915973577627,
+      "boosted_rmse": 2.1221736469478945,
+      "improvement": 14.476471621503473
+    }
+  },
+  "0050_TW": {
+    "Linear": {
+      "vanilla_rmse": 10.62752092241075,
+      "boosted_rmse": 7.621959713902986,
+      "improvement": 28.280924878442686
+    },
+    "LSTM": {
+      "vanilla_rmse": 11.937199233205604,
+      "boosted_rmse": 9.234877269129802,
+      "improvement": 22.63782241783128
+    },
+    "GRU": {
+      "vanilla_rmse": 12.41442222553006,
+      "boosted_rmse": 8.9685424886242,
+      "improvement": 27.757068950172037
+    },
+    "Transformer": {
+      "vanilla_rmse": 9.541429346562229,
+      "boosted_rmse": 8.55655663295072,
+      "improvement": 10.322066829183804
+    }
+  },
+  "2317_TW": {
+    "Linear": {
+      "vanilla_rmse": 7.822010981861716,
+      "boosted_rmse": 7.086618036178061,
+      "improvement": 9.401584162805971
+    },
+    "LSTM": {
+      "vanilla_rmse": 7.3062165171617535,
+      "boosted_rmse": 7.389071206190361,
+      "improvement": -1.1340300254446096
+    },
+    "GRU": {
+      "vanilla_rmse": 7.772607911744752,
+      "boosted_rmse": 7.436917989571886,
+      "improvement": 4.318884034605993
+    },
+    "Transformer": {
+      "vanilla_rmse": 8.135652339358355,
+      "boosted_rmse": 7.583498202323974,
+      "improvement": 6.786845282992125
+    }
+  },
+  "2330_TW": {
+    "Linear": {
+      "vanilla_rmse": 7.133265167523625,
+      "boosted_rmse": 6.088076520536951,
+      "improvement": 14.652317311085184
+    },
+    "LSTM": {
+      "vanilla_rmse": 6.474546118968924,
+      "boosted_rmse": 6.175566640053044,
+      "improvement": 4.617767383569
+    },
+    "GRU": {
+      "vanilla_rmse": 6.4985644790013675,
+      "boosted_rmse": 6.352777436701854,
+      "improvement": 2.2433730213894347
+    },
+    "Transformer": {
+      "vanilla_rmse": 7.773385428359762,
+      "boosted_rmse": 6.175619079369428,
+      "improvement": 20.554317854369845
+    }
+  },
+  "2454_TW": {
+    "Linear": {
+      "vanilla_rmse": 8.75334806937865,
+      "boosted_rmse": 7.680679711065265,
+      "improvement": 12.254377979847968
+    },
+    "LSTM": {
+      "vanilla_rmse": 8.186652188088482,
+      "boosted_rmse": 8.053333364745475,
+      "improvement": 1.6284901358944386
+    },
+    "GRU": {
+      "vanilla_rmse": 8.38251491733211,
+      "boosted_rmse": 7.929934607837341,
+      "improvement": 5.399099362877254
+    },
+    "Transformer": {
+      "vanilla_rmse": 9.474678392713502,
+      "boosted_rmse": 8.03366897105709,
+      "improvement": 15.209058945627326
+    }
+  },
+  "2603_TW": {
+    "Linear": {
+      "vanilla_rmse": 12.904885723811873,
+      "boosted_rmse": 10.53875482087965,
+      "improvement": 18.33515579736037
+    },
+    "LSTM": {
+      "vanilla_rmse": 12.192817823581619,
+      "boosted_rmse": 11.330706241833564,
+      "improvement": 7.070650888268672
+    },
+    "GRU": {
+      "vanilla_rmse": 12.583344222896041,
+      "boosted_rmse": 10.661215336020014,
+      "improvement": 15.275183232916852
+    },
+    "Transformer": {
+      "vanilla_rmse": 15.629663805882364,
+      "boosted_rmse": 10.57074220050522,
+      "improvement": 32.367437126019134
+    }
+  },
+  "2881_TW": {
+    "Linear": {
+      "vanilla_rmse": 6.444266706707761,
+      "boosted_rmse": 5.278042556920027,
+      "improvement": 18.097080752008992
+    },
+    "LSTM": {
+      "vanilla_rmse": 5.7106250510356995,
+      "boosted_rmse": 5.729242643660036,
+      "improvement": -0.3260167224769835
+    },
+    "GRU": {
+      "vanilla_rmse": 5.932424687924339,
+      "boosted_rmse": 5.589029570773999,
+      "improvement": 5.788444611009275
+    },
+    "Transformer": {
+      "vanilla_rmse": 6.514655607623438,
+      "boosted_rmse": 5.3953927115795635,
+      "improvement": 17.180691711993422
+    }
+  }
+}

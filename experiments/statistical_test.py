@@ -40,7 +40,7 @@ ALL_DATASETS = [
 
 SEEDS = [42, 123, 456, 789, 2024]
 
-RESULTS_PATH = Path("experiments/comprehensive_results/statistical_test_results.json")
+RESULTS_PATH = Path("experiments/comprehensive_results/main_experiment/statistical_test_results.json")
 
 
 def set_seed(seed):
