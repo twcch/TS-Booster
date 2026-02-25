@@ -32,7 +32,7 @@ ALL_DATASETS = [
 ]
 
 SEEDS = [42, 123, 456]
-RESULTS_PATH = Path("experiments/comprehensive_results/ablation_adaptive_loss.json")
+RESULTS_PATH = Path("experiments/comprehensive_results/ablation/ablation_adaptive_loss.json")
 
 
 def set_seed(seed):

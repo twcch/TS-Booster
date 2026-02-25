@@ -29,7 +29,7 @@ CMAP_DIV = mcolors.LinearSegmentedColormap.from_list('rg',
 def load_ablation_results():
     """Load all per-dataset ablation JSONs."""
     results = {}
-    for f in sorted(RESULTS_DIR.glob('ablation_results_*.json')):
+    for f in sorted((RESULTS_DIR / 'ablation').glob('ablation_results_*.json')):
         data = json.loads(f.read_text())
         ds = data['metadata']['currency_pair']
         results[ds] = data['results']
@@ -38,7 +38,7 @@ def load_ablation_results():
 
 def load_cross_backbone_results():
     """Load cross-backbone JSON."""
-    f = RESULTS_DIR / 'cross_backbone_all_results.json'
+    f = RESULTS_DIR / 'cross_backbone' / 'cross_backbone_all_results.json'
     return json.loads(f.read_text())
 
 
@@ -48,7 +48,7 @@ def load_cross_backbone_results():
 def copy_architecture():
     import shutil
     for ext in ['png', 'pdf']:
-        src = RESULTS_DIR / 'figures' / f'ts_booster_architecture_v2.{ext}'
+        src = RESULTS_DIR / 'architecture' / f'ts_booster_architecture_v2.{ext}'
         dst = OUTPUT_DIR / f'fig1_architecture.{ext}'
         if src.exists():
             shutil.copy2(src, dst)
