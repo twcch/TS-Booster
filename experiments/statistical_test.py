@@ -58,8 +58,9 @@ def set_seed(seed):
 
 
 def evaluate(model, test_loader, scaler, device):
+    """Return dict with rmse, mae, mda."""
     model.eval()
-    preds, targets = [], []
+    preds, targets, last_obs_list = [], [], []
     with torch.no_grad():
         for batch in test_loader:
             x = batch["raw_input"].to(device)
@@ -68,12 +69,25 @@ def evaluate(model, test_loader, scaler, device):
             pred = output[0] if isinstance(output, tuple) else output
             preds.append(pred.cpu().numpy())
             targets.append(y.cpu().numpy())
+            last_obs_list.append(x[:, -1, 0].cpu().numpy())
     preds = np.concatenate(preds)
     targets = np.concatenate(targets)
+    last_obs = np.concatenate(last_obs_list)
+    if preds.ndim == 3:
+        preds = preds.squeeze(-1)
+    if targets.ndim == 3:
+        targets = targets.squeeze(-1)
     if scaler:
         preds = preds * scaler.scale_[0] + scaler.mean_[0]
         targets = targets * scaler.scale_[0] + scaler.mean_[0]
-    return np.sqrt(mean_squared_error(targets.flatten(), preds.flatten()))
+        last_obs = last_obs * scaler.scale_[0] + scaler.mean_[0]
+    rmse = float(np.sqrt(mean_squared_error(targets.flatten(), preds.flatten())))
+    mae = float(np.mean(np.abs(targets.flatten() - preds.flatten())))
+    # MDA: direction accuracy relative to last observed value
+    pred_dir = np.sign(preds - last_obs[:, None])
+    actual_dir = np.sign(targets - last_obs[:, None])
+    mda = float(np.mean(pred_dir == actual_dir))
+    return {"rmse": rmse, "mae": mae, "mda": mda}
 
 
 def run_pair(ds, seed, epochs=100):
@@ -112,7 +126,7 @@ def run_pair(ds, seed, epochs=100):
         train_loader, val_loader, test_loader, device=device,
         horizon=pred_len, config=config, seq_len=seq_len, verbose=False, model=vanilla
     )
-    vanilla_rmse = evaluate(vanilla, test_loader, scaler, device)
+    vanilla_metrics = evaluate(vanilla, test_loader, scaler, device)
 
     # TS-Booster (full model)
     set_seed(seed)
@@ -126,9 +140,9 @@ def run_pair(ds, seed, epochs=100):
         train_loader, val_loader, test_loader, device=device,
         horizon=pred_len, config=config, seq_len=seq_len, verbose=False, model=booster
     )
-    booster_rmse = evaluate(booster, test_loader, scaler, device)
+    booster_metrics = evaluate(booster, test_loader, scaler, device)
 
-    return vanilla_rmse, booster_rmse
+    return vanilla_metrics, booster_metrics
 
 
 def run_experiments():
@@ -136,26 +150,39 @@ def run_experiments():
     results = {}
 
     for ds in ALL_DATASETS:
-        results[ds] = {"vanilla": [], "booster": []}
+        results[ds] = {
+            "vanilla": {"rmse": [], "mae": [], "mda": []},
+            "booster": {"rmse": [], "mae": [], "mda": []},
+        }
         for seed in SEEDS:
             print(f"  {ds:12s} | Seed {seed} ... ", end="", flush=True)
             pair = run_pair(ds, seed)
             if pair is None:
                 print("SKIP (file not found)")
                 continue
-            v_rmse, b_rmse = pair
-            results[ds]["vanilla"].append(v_rmse)
-            results[ds]["booster"].append(b_rmse)
-            gap = (v_rmse - b_rmse) / v_rmse * 100
+            v_m, b_m = pair
+            for key in ("rmse", "mae", "mda"):
+                results[ds]["vanilla"][key].append(v_m[key])
+                results[ds]["booster"][key].append(b_m[key])
+            gap = (v_m["rmse"] - b_m["rmse"]) / v_m["rmse"] * 100
             tag = "WIN" if gap > 0 else "LOSS"
-            print(f"Vanilla={v_rmse:.6f}  Booster={b_rmse:.6f}  Gap={gap:+.2f}% {tag}")
+            print(f"RMSE: V={v_m['rmse']:.4f} B={b_m['rmse']:.4f} Gap={gap:+.2f}% {tag}")
 
-    # Save
-    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(RESULTS_PATH, 'w') as f:
-        json.dump(results, f, indent=2)
+        # Save incrementally per dataset
+        RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(RESULTS_PATH, 'w') as f:
+            json.dump(results, f, indent=2)
+
     print(f"\nResults saved to {RESULTS_PATH}")
     return results
+
+
+def _get_metric(results, ds, model, metric):
+    """Get metric array, handling both old (flat list) and new (dict) JSON formats."""
+    data = results[ds][model]
+    if isinstance(data, list):
+        return np.array(data) if metric == "rmse" else None
+    return np.array(data[metric])
 
 
 def analyze(results):
@@ -165,7 +192,11 @@ def analyze(results):
     print("STATISTICAL SIGNIFICANCE ANALYSIS: Vanilla Linear vs TS-Booster")
     print("=" * 100)
 
-    # === Per-dataset analysis ===
+    # Detect format
+    sample = results[ALL_DATASETS[0]]["vanilla"]
+    has_extra = isinstance(sample, dict)
+
+    # === Per-dataset RMSE analysis ===
     header = (
         f"{'Dataset':<12} | {'Vanilla RMSE':>13} | {'Booster RMSE':>13} | "
         f"{'Gap%':>8} | {'95% CI':>16} | {'Cohen d':>8} | {'t-stat':>7} | {'p-value':>8} | {'Sig':>5}"
@@ -180,10 +211,9 @@ def analyze(results):
     win_count = 0
 
     for ds in ALL_DATASETS:
-        v = np.array(results[ds]["vanilla"])
-        b = np.array(results[ds]["booster"])
-        n = len(v)
-        if n == 0:
+        v = _get_metric(results, ds, "vanilla", "rmse")
+        b = _get_metric(results, ds, "booster", "rmse")
+        if v is None or len(v) == 0:
             continue
 
         all_vanilla.extend(v.tolist())
@@ -234,6 +264,51 @@ def analyze(results):
     print("-" * len(header))
     print(f"  Significance: ** p<0.01, * p<0.05, + p<0.10 (one-sided paired t-test)")
     print(f"  Significant datasets (p<0.05): {sig_count}/{len(ALL_DATASETS)}")
+
+    # === MAE & MDA summary ===
+    if has_extra:
+        print(f"\n{'=' * 100}")
+        print("ADDITIONAL METRICS: MAE & MDA")
+        print("=" * 100)
+        hdr2 = f"{'Dataset':<12} | {'V_MAE':>8} | {'B_MAE':>8} | {'MAE Gap%':>9} | {'V_MDA':>7} | {'B_MDA':>7} | {'MDA Diff':>9}"
+        print(f"\n{hdr2}")
+        print("-" * len(hdr2))
+
+        mae_wins = 0
+        mda_wins = 0
+        all_mae_gaps = []
+        all_v_mda = []
+        all_b_mda = []
+
+        for ds in ALL_DATASETS:
+            v_mae = _get_metric(results, ds, "vanilla", "mae")
+            b_mae = _get_metric(results, ds, "booster", "mae")
+            v_mda = _get_metric(results, ds, "vanilla", "mda")
+            b_mda = _get_metric(results, ds, "booster", "mda")
+            if v_mae is None or len(v_mae) == 0:
+                continue
+
+            mv = np.mean(v_mae)
+            mb = np.mean(b_mae)
+            mae_gap = (mv - mb) / mv * 100
+            all_mae_gaps.append(mae_gap)
+            if mae_gap > 0:
+                mae_wins += 1
+
+            mvd = np.mean(v_mda) * 100
+            mbd = np.mean(b_mda) * 100
+            mda_diff = mbd - mvd
+            all_v_mda.append(mvd)
+            all_b_mda.append(mbd)
+            if mda_diff > 0:
+                mda_wins += 1
+
+            print(f"  {ds:<12} | {mv:>8.4f} | {mb:>8.4f} | {mae_gap:>+8.2f}% | {mvd:>6.1f}% | {mbd:>6.1f}% | {mda_diff:>+8.2f}%")
+
+        n_ds = len(all_mae_gaps)
+        print("-" * len(hdr2))
+        print(f"  MAE: Booster wins {mae_wins}/{n_ds}, avg gap: {np.mean(all_mae_gaps):+.2f}%")
+        print(f"  MDA: Booster wins {mda_wins}/{n_ds}, avg Vanilla={np.mean(all_v_mda):.1f}%, Booster={np.mean(all_b_mda):.1f}%")
 
     # === Overall tests ===
     print(f"\n{'=' * 80}")
@@ -287,9 +362,9 @@ def analyze(results):
         cat_gaps = []
         cat_wins = 0
         for ds in cat_datasets:
-            v = np.array(results[ds]["vanilla"])
-            b = np.array(results[ds]["booster"])
-            if len(v) == 0:
+            v = _get_metric(results, ds, "vanilla", "rmse")
+            b = _get_metric(results, ds, "booster", "rmse")
+            if v is None or len(v) == 0:
                 continue
             g = np.mean((v - b) / v * 100)
             cat_gaps.append(g)
@@ -319,15 +394,20 @@ def analyze(results):
     print(r"\centering")
     print(r"\caption{Statistical significance of TS-Booster improvement over Vanilla Linear backbone (5 seeds).}")
     print(r"\label{tab:significance}")
-    print(r"\begin{tabular}{lrrrrrl}")
-    print(r"\toprule")
-    print(r"Dataset & Vanilla RMSE & Booster RMSE & Gap (\%) & Cohen's $d$ & $p$-value & Sig. \\")
+    if has_extra:
+        print(r"\begin{tabular}{lrrrrrrrrl}")
+        print(r"\toprule")
+        print(r"Dataset & V\_RMSE & B\_RMSE & RMSE $\Delta$(\%) & V\_MAE & B\_MAE & MAE $\Delta$(\%) & B\_MDA(\%) & $p$-value & Sig. \\")
+    else:
+        print(r"\begin{tabular}{lrrrrrl}")
+        print(r"\toprule")
+        print(r"Dataset & Vanilla RMSE & Booster RMSE & Gap (\%) & Cohen's $d$ & $p$-value & Sig. \\")
     print(r"\midrule")
 
     for ds in ALL_DATASETS:
-        v = np.array(results[ds]["vanilla"])
-        b = np.array(results[ds]["booster"])
-        if len(v) == 0:
+        v = _get_metric(results, ds, "vanilla", "rmse")
+        b = _get_metric(results, ds, "booster", "rmse")
+        if v is None or len(v) == 0:
             continue
         gaps = (v - b) / v * 100
         mean_gap = np.mean(gaps)
@@ -348,7 +428,17 @@ def analyze(results):
             sig = ""
 
         ds_latex = ds.replace("_", r"\_")
-        print(f"{ds_latex} & {mean_v:.4f} & {mean_b:.4f} & {mean_gap:+.2f} & {d:.2f} & {p_one:.4f} & {sig} \\\\")
+        if has_extra:
+            v_mae = _get_metric(results, ds, "vanilla", "mae")
+            b_mae = _get_metric(results, ds, "booster", "mae")
+            b_mda = _get_metric(results, ds, "booster", "mda")
+            mv_mae = np.mean(v_mae)
+            mb_mae = np.mean(b_mae)
+            mae_gap = (mv_mae - mb_mae) / mv_mae * 100
+            mda_pct = np.mean(b_mda) * 100
+            print(f"{ds_latex} & {mean_v:.4f} & {mean_b:.4f} & {mean_gap:+.2f} & {mv_mae:.4f} & {mb_mae:.4f} & {mae_gap:+.2f} & {mda_pct:.1f} & {p_one:.4f} & {sig} \\\\")
+        else:
+            print(f"{ds_latex} & {mean_v:.4f} & {mean_b:.4f} & {mean_gap:+.2f} & {d:.2f} & {p_one:.4f} & {sig} \\\\")
 
     print(r"\bottomrule")
     print(r"\end{tabular}")
@@ -365,12 +455,15 @@ FX_DATASETS = ["USD_TWD", "JPY_TWD", "KRW_TWD", "CAD_TWD", "CNY_TWD", "EUR_TWD",
 
 def plot_improvement_bars(results):
     """Bar chart: RMSE improvement % per dataset with 5-seed error bars and p-value stars."""
-    datasets = [ds for ds in ALL_DATASETS if ds in results and len(results[ds]["vanilla"]) > 0]
-
-    means, stds, sigs = [], [], []
-    for ds in datasets:
-        v = np.array(results[ds]["vanilla"])
-        b = np.array(results[ds]["booster"])
+    datasets, means, stds, sigs = [], [], [], []
+    for ds in ALL_DATASETS:
+        if ds not in results:
+            continue
+        v = _get_metric(results, ds, "vanilla", "rmse")
+        b = _get_metric(results, ds, "booster", "rmse")
+        if v is None or len(v) == 0:
+            continue
+        datasets.append(ds)
         gaps = (v - b) / v * 100
         means.append(np.mean(gaps))
         stds.append(np.std(gaps, ddof=1))
