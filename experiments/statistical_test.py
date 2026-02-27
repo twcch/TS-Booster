@@ -525,10 +525,133 @@ def plot_improvement_bars(results):
     print("  Saved: rmse_improvement.png/pdf")
 
 
+def plot_mae_improvement(results):
+    """Bar chart: MAE improvement % per dataset with 5-seed error bars."""
+    datasets, means, stds = [], [], []
+    for ds in ALL_DATASETS:
+        if ds not in results:
+            continue
+        v = _get_metric(results, ds, "vanilla", "mae")
+        b = _get_metric(results, ds, "booster", "mae")
+        if v is None or len(v) == 0:
+            continue
+        datasets.append(ds)
+        gaps = (v - b) / v * 100
+        means.append(np.mean(gaps))
+        stds.append(np.std(gaps, ddof=1))
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+    x = np.arange(len(datasets))
+    colors = ['#43A047' if m > 0 else '#E53935' for m in means]
+
+    bars = ax.bar(x, means, yerr=stds, capsize=3, color=colors,
+                  edgecolor='white', linewidth=0.5, width=0.7,
+                  error_kw={'linewidth': 1, 'color': '#424242'})
+
+    for i, (bar, mean, std) in enumerate(zip(bars, means, stds)):
+        h = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, h + std + 0.5,
+                f'{mean:+.1f}%', ha='center', va='bottom', fontsize=8, fontweight='bold')
+
+    ax.axhline(y=0, color='#9E9E9E', linewidth=0.8, linestyle='-')
+
+    n_fx = len([d for d in datasets if d in FX_DATASETS])
+    if 0 < n_fx < len(datasets):
+        ax.axvline(x=n_fx - 0.5, color='#424242', linewidth=1.5, linestyle='--', alpha=0.5)
+        ax.text(n_fx / 2 - 0.5, ax.get_ylim()[1] * 0.92, 'FX',
+                ha='center', fontsize=10, fontweight='bold', color='#1565C0')
+        ax.text(n_fx + (len(datasets) - n_fx) / 2 - 0.5, ax.get_ylim()[1] * 0.92, 'Stocks',
+                ha='center', fontsize=10, fontweight='bold', color='#C62828')
+
+    overall_mean = np.mean(means)
+    ax.axhline(y=overall_mean, color='#1565C0', linewidth=1, linestyle=':', alpha=0.7)
+    ax.text(len(datasets) - 0.5, overall_mean + 0.5,
+            f'avg: {overall_mean:+.1f}%', ha='right', fontsize=9, color='#1565C0', fontstyle='italic')
+
+    ax.set_xlabel('Dataset', fontsize=11)
+    ax.set_ylabel('MAE Improvement (%)', fontsize=11)
+    ax.set_title('TS-Booster vs Vanilla Linear: MAE Improvement (5 seeds, error bars = 1 std)',
+                 fontsize=12, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(datasets, rotation=45, ha='right', fontsize=9)
+    ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    plt.savefig(FIGURES_DIR / 'mae_improvement.png', dpi=200, bbox_inches='tight', facecolor='white')
+    plt.savefig(FIGURES_DIR / 'mae_improvement.pdf', bbox_inches='tight', facecolor='white')
+    plt.close()
+    print("  Saved: mae_improvement.png/pdf")
+
+
+def plot_mda_comparison(results):
+    """Grouped bar chart: Vanilla vs Booster MDA per dataset."""
+    datasets, v_means, b_means, v_stds, b_stds = [], [], [], [], []
+    for ds in ALL_DATASETS:
+        if ds not in results:
+            continue
+        v = _get_metric(results, ds, "vanilla", "mda")
+        b = _get_metric(results, ds, "booster", "mda")
+        if v is None or len(v) == 0:
+            continue
+        datasets.append(ds)
+        v_means.append(np.mean(v) * 100)
+        b_means.append(np.mean(b) * 100)
+        v_stds.append(np.std(v, ddof=1) * 100)
+        b_stds.append(np.std(b, ddof=1) * 100)
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+    x = np.arange(len(datasets))
+    w = 0.35
+
+    ax.bar(x - w/2, v_means, w, yerr=v_stds, capsize=2, label='Vanilla',
+           color='#BDBDBD', edgecolor='white', error_kw={'linewidth': 0.8})
+    ax.bar(x + w/2, b_means, w, yerr=b_stds, capsize=2, label='TS-Booster',
+           color='#43A047', edgecolor='white', error_kw={'linewidth': 0.8})
+
+    # Value labels on Booster bars
+    for i, (bm, bs) in enumerate(zip(b_means, b_stds)):
+        ax.text(i + w/2, bm + bs + 0.3, f'{bm:.1f}%',
+                ha='center', va='bottom', fontsize=7, fontweight='bold', color='#2E7D32')
+
+    n_fx = len([d for d in datasets if d in FX_DATASETS])
+    if 0 < n_fx < len(datasets):
+        ax.axvline(x=n_fx - 0.5, color='#424242', linewidth=1.5, linestyle='--', alpha=0.5)
+
+    avg_v = np.mean(v_means)
+    avg_b = np.mean(b_means)
+    ax.axhline(y=avg_v, color='#757575', linewidth=1, linestyle=':', alpha=0.5)
+    ax.axhline(y=avg_b, color='#2E7D32', linewidth=1, linestyle=':', alpha=0.5)
+    ax.text(0.02, 0.95, f'avg: Vanilla={avg_v:.1f}%, Booster={avg_b:.1f}%',
+            transform=ax.transAxes, fontsize=9, color='#424242', fontstyle='italic')
+
+    ax.set_xlabel('Dataset', fontsize=11)
+    ax.set_ylabel('MDA (%)', fontsize=11)
+    ax.set_title('Mean Directional Accuracy: Vanilla vs TS-Booster (5 seeds)',
+                 fontsize=12, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(datasets, rotation=45, ha='right', fontsize=9)
+    ax.set_ylim(50, max(b_means) + 8)
+    ax.legend(loc='upper right', fontsize=10)
+    ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    plt.savefig(FIGURES_DIR / 'mda_comparison.png', dpi=200, bbox_inches='tight', facecolor='white')
+    plt.savefig(FIGURES_DIR / 'mda_comparison.pdf', bbox_inches='tight', facecolor='white')
+    plt.close()
+    print("  Saved: mda_comparison.png/pdf")
+
+
 def generate_figures(results):
     """Generate all main experiment figures."""
     print("\nGenerating figures...")
     plot_improvement_bars(results)
+    # MAE & MDA figures (only if new format with extra metrics)
+    sample = results[ALL_DATASETS[0]]["vanilla"]
+    if isinstance(sample, dict):
+        plot_mae_improvement(results)
+        plot_mda_comparison(results)
     print(f"Figures saved to {FIGURES_DIR}/")
 
 
