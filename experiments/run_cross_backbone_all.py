@@ -409,10 +409,8 @@ def plot_summary(all_results, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_dir / 'cross_backbone_summary_heatmap.png',
                dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(output_dir / 'cross_backbone_summary_heatmap.pdf',
-               bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: cross_backbone_summary_heatmap.png/pdf")
+    print("  Saved: cross_backbone_summary_heatmap.png")
 
     # === Figure 2: Grouped bar chart ===
     fig, ax = plt.subplots(figsize=(14, 6))
@@ -439,10 +437,8 @@ def plot_summary(all_results, output_dir):
     plt.tight_layout()
     plt.savefig(output_dir / 'cross_backbone_summary_bars.png',
                dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(output_dir / 'cross_backbone_summary_bars.pdf',
-               bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: cross_backbone_summary_bars.png/pdf")
+    print("  Saved: cross_backbone_summary_bars.png")
 
 
 if __name__ == "__main__":

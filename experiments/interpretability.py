@@ -227,9 +227,8 @@ def plot_decomp_weights(all_results):
 
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / "decomp_weights.png", dpi=150, bbox_inches='tight')
-    plt.savefig(FIGURES_DIR / "decomp_weights.pdf", bbox_inches='tight')
     plt.close()
-    print("  Saved: decomp_weights.png/pdf")
+    print("  Saved: decomp_weights.png")
 
 
 def plot_snr_gate_params(all_results):
@@ -275,9 +274,8 @@ def plot_snr_gate_params(all_results):
 
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / "snr_gate_params.png", dpi=150, bbox_inches='tight')
-    plt.savefig(FIGURES_DIR / "snr_gate_params.pdf", bbox_inches='tight')
     plt.close()
-    print("  Saved: snr_gate_params.png/pdf")
+    print("  Saved: snr_gate_params.png")
 
 
 def plot_gate_distributions(all_results):
@@ -319,9 +317,8 @@ def plot_gate_distributions(all_results):
 
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / "gate_distributions.png", dpi=150, bbox_inches='tight')
-    plt.savefig(FIGURES_DIR / "gate_distributions.pdf", bbox_inches='tight')
     plt.close()
-    print("  Saved: gate_distributions.png/pdf")
+    print("  Saved: gate_distributions.png")
 
 
 def plot_prediction_curves(all_results, showcase_datasets=None):
@@ -364,9 +361,8 @@ def plot_prediction_curves(all_results, showcase_datasets=None):
 
         plt.tight_layout()
         plt.savefig(FIGURES_DIR / f"pred_curve_{ds}.png", dpi=150, bbox_inches='tight')
-        plt.savefig(FIGURES_DIR / f"pred_curve_{ds}.pdf", bbox_inches='tight')
         plt.close()
-        print(f"  Saved: pred_curve_{ds}.png/pdf")
+        print(f"  Saved: pred_curve_{ds}.png")
 
 
 def plot_gate_vs_improvement(all_results):
@@ -414,9 +410,8 @@ def plot_gate_vs_improvement(all_results):
 
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / "gate_vs_improvement.png", dpi=150, bbox_inches='tight')
-    plt.savefig(FIGURES_DIR / "gate_vs_improvement.pdf", bbox_inches='tight')
     plt.close()
-    print("  Saved: gate_vs_improvement.png/pdf")
+    print("  Saved: gate_vs_improvement.png")
 
 
 def print_summary_table(all_results):

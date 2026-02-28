@@ -607,9 +607,8 @@ def plot_tsb_vs_best_baseline(results):
     plt.tight_layout()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     plt.savefig(FIGURES_DIR / 'tsb_vs_best_baseline.png', dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(FIGURES_DIR / 'tsb_vs_best_baseline.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: tsb_vs_best_baseline.png/pdf")
+    print("  Saved: tsb_vs_best_baseline.png")
 
 
 def plot_average_rank(results):
@@ -660,9 +659,8 @@ def plot_average_rank(results):
     plt.tight_layout()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     plt.savefig(FIGURES_DIR / 'average_rank.png', dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(FIGURES_DIR / 'average_rank.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: average_rank.png/pdf")
+    print("  Saved: average_rank.png")
 
 
 def generate_figures(results):

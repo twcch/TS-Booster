@@ -370,9 +370,8 @@ def plot_figures(results):
     cbar.set_label('RMSE Improvement (%)', fontsize=10)
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / 'ablation_heatmap_5seed.png', dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(FIGURES_DIR / 'ablation_heatmap_5seed.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: ablation_heatmap_5seed.png/pdf")
+    print("  Saved: ablation_heatmap_5seed.png")
 
     # === Figure: Component Contribution Grouped Bar ===
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -413,9 +412,8 @@ def plot_figures(results):
     ax.grid(axis='y', alpha=0.3)
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / 'ablation_component_5seed.png', dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(FIGURES_DIR / 'ablation_component_5seed.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: ablation_component_5seed.png/pdf")
+    print("  Saved: ablation_component_5seed.png")
 
     # === Figure: Absolute RMSE Table ===
     fig, ax = plt.subplots(figsize=(10, 10))
@@ -490,9 +488,8 @@ def plot_figures(results):
                  fontsize=13, fontweight='bold', pad=20)
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / 'ablation_table_5seed.png', dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(FIGURES_DIR / 'ablation_table_5seed.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: ablation_table_5seed.png/pdf")
+    print("  Saved: ablation_table_5seed.png")
 
 
 if __name__ == "__main__":

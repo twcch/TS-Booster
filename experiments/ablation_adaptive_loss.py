@@ -207,9 +207,8 @@ def plot_fixed_vs_adaptive(results):
 
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / "fixed_vs_adaptive.png", dpi=150, bbox_inches='tight')
-    plt.savefig(FIGURES_DIR / "fixed_vs_adaptive.pdf", bbox_inches='tight')
     plt.close()
-    print("  Saved: fixed_vs_adaptive.png/pdf")
+    print("  Saved: fixed_vs_adaptive.png")
 
 
 def analyze():
