@@ -740,9 +740,8 @@ def plot_tsb_vs_linear(results):
     plt.tight_layout()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     plt.savefig(FIGURES_DIR / 'tsb_vs_linear.png', dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(FIGURES_DIR / 'tsb_vs_linear.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: tsb_vs_linear.png/pdf")
+    print("  Saved: tsb_vs_linear.png")
 
 
 def generate_figures(results):

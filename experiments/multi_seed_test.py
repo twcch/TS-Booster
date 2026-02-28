@@ -144,9 +144,8 @@ def plot_expert_vs_tsb(results):
 
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / "expert_vs_tsb.png", dpi=150, bbox_inches='tight')
-    plt.savefig(FIGURES_DIR / "expert_vs_tsb.pdf", bbox_inches='tight')
     plt.close()
-    print("  Saved: expert_vs_tsb.png/pdf")
+    print("  Saved: expert_vs_tsb.png")
 
 
 def analyze(results):

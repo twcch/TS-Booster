@@ -70,11 +70,10 @@ def load_cross_backbone_results():
 # =========================================================================
 def copy_architecture():
     import shutil
-    for ext in ['png', 'pdf']:
-        src = RESULTS_DIR / 'architecture' / f'ts_booster_architecture_v2.{ext}'
-        dst = OUTPUT_DIR / f'fig1_architecture.{ext}'
-        if src.exists():
-            shutil.copy2(src, dst)
+    src = RESULTS_DIR / 'architecture' / 'ts_booster_architecture_v2.png'
+    dst = OUTPUT_DIR / 'fig1_architecture.png'
+    if src.exists():
+        shutil.copy2(src, dst)
     print("Fig 1: Architecture diagram copied")
 
 
@@ -157,7 +156,6 @@ def fig2_ablation_heatmap(ablation):
 
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / 'fig2_ablation_heatmap.png', dpi=250, bbox_inches='tight', facecolor='white')
-    plt.savefig(OUTPUT_DIR / 'fig2_ablation_heatmap.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
     print("Fig 2: Ablation heatmap saved")
 
@@ -237,7 +235,6 @@ def fig3_cross_backbone_heatmap(cb_results):
 
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / 'fig3_cross_backbone_heatmap.png', dpi=250, bbox_inches='tight', facecolor='white')
-    plt.savefig(OUTPUT_DIR / 'fig3_cross_backbone_heatmap.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
     print("Fig 3: Cross-backbone heatmap saved")
 
@@ -295,7 +292,6 @@ def fig4_component_summary(ablation):
 
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / 'fig4_component_summary.png', dpi=250, bbox_inches='tight', facecolor='white')
-    plt.savefig(OUTPUT_DIR / 'fig4_component_summary.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
     print("Fig 4: Component contribution summary saved")
 
@@ -349,7 +345,6 @@ def fig5_backbone_summary(cb_results):
 
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / 'fig5_backbone_summary.png', dpi=250, bbox_inches='tight', facecolor='white')
-    plt.savefig(OUTPUT_DIR / 'fig5_backbone_summary.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
     print("Fig 5: Backbone summary saved")
 
@@ -435,7 +430,6 @@ def fig6_ablation_table(ablation):
 
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / 'fig6_ablation_table.png', dpi=250, bbox_inches='tight', facecolor='white')
-    plt.savefig(OUTPUT_DIR / 'fig6_ablation_table.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
     print("Fig 6: Ablation table saved")
 

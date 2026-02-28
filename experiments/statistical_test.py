@@ -520,9 +520,8 @@ def plot_improvement_bars(results):
     plt.tight_layout()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     plt.savefig(FIGURES_DIR / 'rmse_improvement.png', dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(FIGURES_DIR / 'rmse_improvement.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: rmse_improvement.png/pdf")
+    print("  Saved: rmse_improvement.png")
 
 
 def plot_mae_improvement(results):
@@ -579,9 +578,8 @@ def plot_mae_improvement(results):
     plt.tight_layout()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     plt.savefig(FIGURES_DIR / 'mae_improvement.png', dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(FIGURES_DIR / 'mae_improvement.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: mae_improvement.png/pdf")
+    print("  Saved: mae_improvement.png")
 
 
 def plot_mda_comparison(results):
@@ -638,9 +636,8 @@ def plot_mda_comparison(results):
     plt.tight_layout()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     plt.savefig(FIGURES_DIR / 'mda_comparison.png', dpi=200, bbox_inches='tight', facecolor='white')
-    plt.savefig(FIGURES_DIR / 'mda_comparison.pdf', bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: mda_comparison.png/pdf")
+    print("  Saved: mda_comparison.png")
 
 
 def generate_figures(results):

@@ -369,9 +369,7 @@ def draw_architecture():
     plt.tight_layout()
     plt.savefig('experiments/comprehensive_results/architecture/ts_booster_architecture_v2.png',
                 dpi=250, bbox_inches='tight', facecolor='white')
-    plt.savefig('experiments/comprehensive_results/architecture/ts_booster_architecture_v2.pdf',
-                bbox_inches='tight', facecolor='white')
-    print("Saved to experiments/comprehensive_results/architecture/ts_booster_architecture_v2.png/.pdf")
+    print("Saved to experiments/comprehensive_results/architecture/ts_booster_architecture_v2.png")
     plt.close()
 
 
