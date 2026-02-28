@@ -27,7 +27,19 @@ CMAP_DIV = mcolors.LinearSegmentedColormap.from_list('rg',
 
 
 def load_ablation_results():
-    """Load all per-dataset ablation JSONs."""
+    """Load ablation results (prefer 5-seed unified JSON, fallback to per-dataset)."""
+    unified = RESULTS_DIR / 'ablation' / 'ablation_5seed.json'
+    if unified.exists():
+        raw = json.loads(unified.read_text())
+        # Convert to same format: {ds: {config: {"RMSE": mean_val}}}
+        results = {}
+        for ds in raw:
+            results[ds] = {}
+            for cfg in raw[ds]:
+                rmse_list = raw[ds][cfg]["rmse"]
+                results[ds][cfg] = {"RMSE": float(np.mean(rmse_list))}
+        return results
+    # Fallback: old per-dataset single-seed JSONs
     results = {}
     for f in sorted((RESULTS_DIR / 'ablation').glob('ablation_results_*.json')):
         data = json.loads(f.read_text())
