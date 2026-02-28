@@ -49,6 +49,7 @@ CATEGORIES = {
 METHODS = ["Historical Vol", "XGBoost", "LightGBM", "Linear", "Linear+TSB"]
 
 RESULTS_PATH = Path("experiments/comprehensive_results/backtest/backtest_results.json")
+DAILY_RETURNS_PATH = Path("experiments/comprehensive_results/backtest/backtest_daily_returns.json")
 FIGURES_DIR = Path("experiments/comprehensive_results/backtest/figures")
 SEED = 42
 LOOKBACK = 30
@@ -322,7 +323,6 @@ def run_all_experiments():
     if RESULTS_PATH.exists():
         with open(RESULTS_PATH) as f:
             results = json.load(f)
-        # Detect old nested format with "strategy"/"var_95" keys
         first_ds = next(iter(results.values()), {})
         first_method = next(iter(first_ds.values()), {})
         if "strategy" in first_method:
@@ -333,9 +333,19 @@ def run_all_experiments():
     else:
         results = {}
 
+    # Load existing daily returns
+    if DAILY_RETURNS_PATH.exists():
+        with open(DAILY_RETURNS_PATH) as f:
+            daily_data = json.load(f)
+        print(f"Loaded existing daily returns from {DAILY_RETURNS_PATH}")
+    else:
+        daily_data = {}
+
     for ds in ALL_DATASETS:
-        # Check if already fully computed
-        if ds in results and all(m in results[ds] for m in METHODS):
+        # Skip only if BOTH summary and daily returns exist
+        has_summary = ds in results and all(m in results[ds] for m in METHODS)
+        has_daily = ds in daily_data and all(m in daily_data[ds] for m in METHODS)
+        if has_summary and has_daily:
             print(f"  {ds:12s} | Already computed, skipping")
             continue
 
@@ -357,37 +367,41 @@ def run_all_experiments():
 
         if ds not in results:
             results[ds] = {}
+        if ds not in daily_data:
+            daily_data[ds] = {}
+        daily_data[ds]["actual_returns"] = daily_returns.tolist()
 
         def compute_and_store(method_name, pred_vol):
             """Compute strategy metrics from predictions and store."""
             strat_ret = run_inv_vol_strategy(pred_vol, daily_returns)
             strat_metrics = compute_strategy_metrics(strat_ret)
             results[ds][method_name] = strat_metrics
+            daily_data[ds][method_name] = strat_ret.tolist()
             return strat_metrics
 
         # 1. Historical Vol
-        if "Historical Vol" not in results[ds]:
+        if "Historical Vol" not in daily_data[ds]:
             t0 = time.time()
             hist_preds = generate_historical_vol(tree_data)  # [n_test, 3]
             sm = compute_and_store("Historical Vol", hist_preds[:, 0])
             print(f"  Historical Vol| Sharpe={sm['sharpe']:>7.3f} ({time.time()-t0:.1f}s)")
 
         # 2. XGBoost
-        if "XGBoost" not in results[ds]:
+        if "XGBoost" not in daily_data[ds]:
             t0 = time.time()
             xgb_preds = generate_tree_predictions(tree_data, method="xgboost")
             sm = compute_and_store("XGBoost", xgb_preds[:, 0])
             print(f"  XGBoost       | Sharpe={sm['sharpe']:>7.3f} ({time.time()-t0:.1f}s)")
 
         # 3. LightGBM
-        if "LightGBM" not in results[ds]:
+        if "LightGBM" not in daily_data[ds]:
             t0 = time.time()
             lgb_preds = generate_tree_predictions(tree_data, method="lightgbm")
             sm = compute_and_store("LightGBM", lgb_preds[:, 0])
             print(f"  LightGBM      | Sharpe={sm['sharpe']:>7.3f} ({time.time()-t0:.1f}s)")
 
         # 4. Linear (vanilla)
-        if "Linear" not in results[ds]:
+        if "Linear" not in daily_data[ds]:
             t0 = time.time()
             vanilla_preds = generate_dl_predictions(
                 train_loader, val_loader, test_loader, scaler, model_type="vanilla"
@@ -396,7 +410,7 @@ def run_all_experiments():
             print(f"  Linear        | Sharpe={sm['sharpe']:>7.3f} ({time.time()-t0:.1f}s)")
 
         # 5. Linear+TSB (TS-Booster)
-        if "Linear+TSB" not in results[ds]:
+        if "Linear+TSB" not in daily_data[ds]:
             t0 = time.time()
             booster_preds = generate_dl_predictions(
                 train_loader, val_loader, test_loader, scaler, model_type="booster"
@@ -408,9 +422,12 @@ def run_all_experiments():
         RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(RESULTS_PATH, 'w') as f:
             json.dump(results, f, indent=2)
+        with open(DAILY_RETURNS_PATH, 'w') as f:
+            json.dump(daily_data, f)
 
     print(f"\nAll results saved to {RESULTS_PATH}")
-    return results
+    print(f"Daily returns saved to {DAILY_RETURNS_PATH}")
+    return results, daily_data
 
 
 # ──────────────────────────────────────────────────────────────
@@ -744,10 +761,71 @@ def plot_tsb_vs_linear(results):
     print("  Saved: tsb_vs_linear.png")
 
 
-def generate_figures(results):
+def plot_cumulative_return_diff(daily_data):
+    """Bar chart: TSB vs Linear cumulative return advantage per dataset."""
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+
+    datasets = [ds for ds in ALL_DATASETS
+                if ds in daily_data and "Linear+TSB" in daily_data[ds] and "Linear" in daily_data[ds]]
+
+    diffs = []
+    for ds in datasets:
+        tsb_cum = np.cumprod(1 + np.array(daily_data[ds]["Linear+TSB"]))[-1]
+        lin_cum = np.cumprod(1 + np.array(daily_data[ds]["Linear"]))[-1]
+        diffs.append((tsb_cum / lin_cum - 1) * 100)
+
+    # Separate FX and Stocks with a visual gap
+    fx_ds = [ds for ds in datasets if ds in FX_DATASETS]
+    stock_ds = [ds for ds in datasets if ds in STOCK_DATASETS]
+    ordered = fx_ds + stock_ds
+    ordered_diffs = []
+    for ds in ordered:
+        idx = datasets.index(ds)
+        ordered_diffs.append(diffs[idx])
+
+    colors = ['#43A047' if d >= 0 else '#E53935' for d in ordered_diffs]
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    x = np.arange(len(ordered))
+    bars = ax.bar(x, ordered_diffs, color=colors, edgecolor='white', width=0.7)
+
+    # Value labels
+    for i, (bar, val) in enumerate(zip(bars, ordered_diffs)):
+        y_pos = val + (0.8 if val >= 0 else -0.8)
+        va = 'bottom' if val >= 0 else 'top'
+        ax.text(i, y_pos, f'{val:+.1f}%', ha='center', va=va,
+                fontsize=9, fontweight='bold')
+
+    # Category separator
+    sep = len(fx_ds) - 0.5
+    ax.axvline(x=sep, color='#424242', linewidth=1, linestyle='--', alpha=0.5)
+    ax.text(sep / 2, ax.get_ylim()[1] * 0.92, 'FX', ha='center',
+            fontsize=12, fontweight='bold', color='#616161')
+    ax.text((sep + len(ordered)) / 2, ax.get_ylim()[1] * 0.92, 'Stocks', ha='center',
+            fontsize=12, fontweight='bold', color='#616161')
+
+    ax.axhline(y=0, color='#424242', linewidth=1)
+    ax.set_xticks(x)
+    ax.set_xticklabels(ordered, rotation=45, ha='right', fontsize=10)
+    ax.set_ylabel('Cumulative Return Advantage (%)', fontsize=12)
+    ax.set_title(f'Linear+TSB vs Linear — Cumulative Return Difference '
+                 f'({sum(1 for d in ordered_diffs if d > 0)}/{len(ordered_diffs)} wins)',
+                 fontsize=13, fontweight='bold')
+    ax.grid(axis='y', alpha=0.2)
+
+    plt.tight_layout()
+    plt.savefig(FIGURES_DIR / 'tsb_vs_linear_cumreturn.png', dpi=200,
+                bbox_inches='tight', facecolor='white')
+    plt.close()
+    print("  Saved: tsb_vs_linear_cumreturn.png")
+
+
+def generate_figures(results, daily_data=None):
     """Generate all backtest figures."""
     print("\nGenerating figures...")
     plot_tsb_vs_linear(results)
+    if daily_data:
+        plot_cumulative_return_diff(daily_data)
     print(f"Figures saved to {FIGURES_DIR}/")
 
 
@@ -760,14 +838,18 @@ if __name__ == "__main__":
     parser.add_argument("--analyze", action="store_true", help="Only analyze saved results")
     args = parser.parse_args()
 
+    daily_data = None
     if args.analyze:
         if not RESULTS_PATH.exists():
             print(f"No saved results at {RESULTS_PATH}. Run without --analyze first.")
             sys.exit(1)
         with open(RESULTS_PATH) as f:
             results = json.load(f)
+        if DAILY_RETURNS_PATH.exists():
+            with open(DAILY_RETURNS_PATH) as f:
+                daily_data = json.load(f)
     else:
-        results = run_all_experiments()
+        results, daily_data = run_all_experiments()
 
     analyze(results)
-    generate_figures(results)
+    generate_figures(results, daily_data)
