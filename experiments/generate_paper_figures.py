@@ -37,9 +37,20 @@ def load_ablation_results():
 
 
 def load_cross_backbone_results():
-    """Load cross-backbone JSON."""
+    """Load cross-backbone JSON and compute improvement from 5-seed mean."""
     f = RESULTS_DIR / 'cross_backbone' / 'cross_backbone_all_results.json'
-    return json.loads(f.read_text())
+    raw = json.loads(f.read_text())
+    # Normalize: compute 'improvement' from vanilla/boosted RMSE lists
+    for ds in raw:
+        for bb in raw[ds]:
+            entry = raw[ds][bb]
+            v = entry.get('vanilla_rmse')
+            b = entry.get('boosted_rmse')
+            if v is not None and b is not None:
+                v_mean = float(np.mean(v)) if isinstance(v, list) else float(v)
+                b_mean = float(np.mean(b)) if isinstance(b, list) else float(b)
+                entry['improvement'] = (v_mean - b_mean) / v_mean * 100
+    return raw
 
 
 # =========================================================================
