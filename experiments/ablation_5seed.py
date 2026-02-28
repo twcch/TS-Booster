@@ -3,8 +3,8 @@ Full 4-config ablation with 5 seeds: Vanilla → +Decomp → +Expert → TS-Boos
 
 Reuses existing 5-seed results where available:
   - Vanilla / TS-Booster RMSE: from statistical_test_results.json
-  - +Expert RMSE: from multi_seed_expert_vs_tsb.json
-  - +Decomp: runs fresh (only config without 5-seed data)
+  - +Decomp: runs fresh
+  - +Expert: runs fresh (or reuse from saved ablation_5seed.json on resume)
 
 Output: ablation/ablation_5seed.json  (unified, all 4 configs × 16 datasets × 5 seeds)
 
@@ -51,9 +51,8 @@ RESULTS_DIR = Path("experiments/comprehensive_results/ablation")
 RESULTS_PATH = RESULTS_DIR / "ablation_5seed.json"
 FIGURES_DIR = RESULTS_DIR / "figures"
 
-# Paths to reuse existing 5-seed data
+# Reuse Vanilla/TSB from main experiment
 MAIN_RESULTS = Path("experiments/comprehensive_results/main_experiment/statistical_test_results.json")
-EXPERT_RESULTS = RESULTS_DIR / "multi_seed_expert_vs_tsb.json"
 
 
 def set_seed(seed):
@@ -101,16 +100,6 @@ def load_existing_results():
                 results[ds]["Vanilla"] = {"rmse": v["rmse"] if isinstance(v, dict) else v}
                 results[ds]["TS-Booster"] = {"rmse": b["rmse"] if isinstance(b, dict) else b}
         print(f"  Loaded Vanilla + TS-Booster from {MAIN_RESULTS} ({len(results)} datasets)")
-
-    # +Expert from multi_seed_test
-    if EXPERT_RESULTS.exists():
-        with open(EXPERT_RESULTS) as f:
-            expert = json.load(f)
-        for ds in ALL_DATASETS:
-            if ds in expert:
-                results.setdefault(ds, {})
-                results[ds]["+Expert"] = {"rmse": expert[ds]["expert_rmse"]}
-        print(f"  Loaded +Expert from {EXPERT_RESULTS}")
 
     return results
 

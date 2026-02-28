@@ -5,7 +5,7 @@ Compares:
   1. Adaptive (default) — dynamic aux/base weights via AdaptiveWeightScheduler
   2. Fixed — constant aux_weight=0.3, base_weight=0.1 throughout training
 
-Runs on all 16 datasets with 3 seeds for speed.
+Runs on all 16 datasets with 5 seeds.
 
 Usage:
   uv run python experiments/ablation_adaptive_loss.py
@@ -34,7 +34,7 @@ ALL_DATASETS = [
     "0050_TW", "2317_TW", "2330_TW", "2454_TW", "2603_TW", "2881_TW",
 ]
 
-SEEDS = [42, 123, 456]
+SEEDS = [42, 123, 456, 789, 2024]
 RESULTS_PATH = Path("experiments/comprehensive_results/ablation/ablation_adaptive_loss.json")
 FIGURES_DIR = Path("experiments/comprehensive_results/ablation/figures")
 
@@ -113,15 +113,28 @@ def run_one(ds, seed, use_adaptive=True, epochs=100):
 
 
 def main():
-    results = {}
+    # Load existing results for resume
+    if RESULTS_PATH.exists():
+        with open(RESULTS_PATH) as f:
+            results = json.load(f)
+        print(f"Loaded existing results from {RESULTS_PATH}")
+    else:
+        results = {}
 
     for ds in ALL_DATASETS:
-        results[ds] = {"adaptive": [], "fixed": []}
+        results.setdefault(ds, {"adaptive": [], "fixed": []})
+        n_existing = len(results[ds]["adaptive"])
+
+        # Skip if already complete
+        if n_existing >= len(SEEDS):
+            print(f"\n  {ds}: SKIP (already has {n_existing} seeds)")
+            continue
+
         print(f"\n{'='*60}")
-        print(f"Dataset: {ds}")
+        print(f"Dataset: {ds} (have {n_existing}/{len(SEEDS)} seeds)")
         print(f"{'='*60}")
 
-        for seed in SEEDS:
+        for seed in SEEDS[n_existing:]:
             # Adaptive
             print(f"  Seed {seed} | Adaptive ... ", end="", flush=True)
             r_adapt = run_one(ds, seed, use_adaptive=True)
