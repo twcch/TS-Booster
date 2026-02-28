@@ -275,6 +275,67 @@ def analyze(all_results):
     print(r"\end{table}")
 
 
+def plot_per_dataset(all_results, output_dir):
+    """Per-dataset bar chart: Vanilla vs TS-Booster for each backbone (5-seed mean ± std)."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for ds in ALL_DATASETS:
+        if ds not in all_results:
+            continue
+
+        backbones = [bb for bb in BACKBONES if bb in all_results[ds]]
+        if not backbones:
+            continue
+
+        v_means, v_stds, b_means, b_stds = [], [], [], []
+        for bb in backbones:
+            entry = all_results[ds][bb]
+            v = entry['vanilla_rmse']
+            b = entry['boosted_rmse']
+            v_arr = v if isinstance(v, list) else [v]
+            b_arr = b if isinstance(b, list) else [b]
+            v_means.append(np.mean(v_arr))
+            v_stds.append(np.std(v_arr))
+            b_means.append(np.mean(b_arr))
+            b_stds.append(np.std(b_arr))
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        x = np.arange(len(backbones))
+        width = 0.35
+
+        ax.bar(x - width/2, v_means, width, yerr=v_stds, capsize=4,
+               label='Vanilla', color='#90CAF9', edgecolor='#37474F', linewidth=0.8)
+        ax.bar(x + width/2, b_means, width, yerr=b_stds, capsize=4,
+               label='+ TS-Booster', color='#A5D6A7', edgecolor='#37474F', linewidth=0.8)
+
+        # Improvement labels
+        for i, (vm, bm) in enumerate(zip(v_means, b_means)):
+            gap = (vm - bm) / vm * 100
+            color = '#1B5E20' if gap > 0 else '#B71C1C'
+            ax.text(i + width/2, bm + b_stds[i] + 0.001, f'{gap:+.1f}%',
+                    ha='center', va='bottom', fontsize=9, fontweight='bold', color=color)
+
+        ax.set_xlabel('Backbone', fontsize=11)
+        ax.set_ylabel('Test RMSE', fontsize=11)
+        ax.set_title(f'{ds}: Vanilla vs TS-Booster (5-seed mean ± std)',
+                     fontsize=13, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels(backbones, fontsize=10)
+        ax.legend(fontsize=10)
+        ax.grid(axis='y', alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig(output_dir / f'cross_backbone_{ds}.png',
+                    dpi=200, bbox_inches='tight', facecolor='white')
+        plt.close()
+
+    print(f"  Saved: {len([ds for ds in ALL_DATASETS if ds in all_results])} per-dataset bar charts")
+
+
 def plot_summary(all_results, output_dir):
     """Summary heatmap + grouped bar chart across all datasets and backbones."""
     import matplotlib
@@ -397,6 +458,7 @@ if __name__ == "__main__":
             all_results = json.load(f)
         analyze(all_results)
         print("\nGenerating figures...")
+        plot_per_dataset(all_results, FIGURES_DIR)
         plot_summary(all_results, FIGURES_DIR)
         print("Done!")
         sys.exit(0)
@@ -435,5 +497,6 @@ if __name__ == "__main__":
 
     analyze(all_results)
     print("\nGenerating figures...")
+    plot_per_dataset(all_results, FIGURES_DIR)
     plot_summary(all_results, FIGURES_DIR)
     print("\nDone!")
