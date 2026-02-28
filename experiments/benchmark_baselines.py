@@ -47,6 +47,7 @@ FIGURES_DIR = Path("experiments/comprehensive_results/benchmark/figures")
 LOOKBACK = 30
 HORIZON = 3
 VOL_WINDOW = 7
+SEEDS = [42, 123, 456, 789, 2024]
 
 
 def extract_data(ds):
@@ -112,11 +113,10 @@ def compute_rmse(preds, targets, scaler):
     return np.sqrt(mean_squared_error(targets_inv.flatten(), preds_inv.flatten()))
 
 
-def run_xgboost(data):
+def run_xgboost(data, seed=42):
     """Train 3 per-step XGBRegressors with early stopping, return RMSE."""
     from xgboost import XGBRegressor
 
-    # Flatten [N, 30, 2] -> [N, 60]
     X_train = data["X_train"].reshape(len(data["X_train"]), -1)
     X_val = data["X_val"].reshape(len(data["X_val"]), -1)
     X_test = data["X_test"].reshape(len(data["X_test"]), -1)
@@ -131,7 +131,7 @@ def run_xgboost(data):
             subsample=0.8,
             colsample_bytree=0.8,
             early_stopping_rounds=30,
-            random_state=42,
+            random_state=seed,
             verbosity=0,
         )
         model.fit(
@@ -144,7 +144,7 @@ def run_xgboost(data):
     return compute_rmse(preds, data["y_test"], data["scaler"])
 
 
-def run_lightgbm(data):
+def run_lightgbm(data, seed=42):
     """Train 3 per-step LGBMRegressors with early stopping, return RMSE."""
     from lightgbm import LGBMRegressor
 
@@ -161,7 +161,7 @@ def run_lightgbm(data):
             learning_rate=0.05,
             subsample=0.8,
             colsample_bytree=0.8,
-            random_state=42,
+            random_state=seed,
             verbose=-1,
         )
         model.fit(
@@ -228,7 +228,7 @@ def run_arima(data):
 
 
 def load_existing_dl_results():
-    """Load vanilla/booster RMSE from saved 5-seed results (mean across seeds)."""
+    """Load vanilla/booster RMSE arrays from saved 5-seed results."""
     if not DL_RESULTS_PATH.exists():
         print(f"WARNING: {DL_RESULTS_PATH} not found. DL results will be missing.")
         return {}, {}
@@ -240,46 +240,58 @@ def load_existing_dl_results():
     booster_rmse = {}
     for ds in ALL_DATASETS:
         if ds in raw:
-            vanilla_rmse[ds] = float(np.mean(raw[ds]["vanilla"]))
-            booster_rmse[ds] = float(np.mean(raw[ds]["booster"]))
+            v = raw[ds]["vanilla"]
+            b = raw[ds]["booster"]
+            # Handle both old (flat list) and new (dict) formats
+            vanilla_rmse[ds] = v["rmse"] if isinstance(v, dict) else v
+            booster_rmse[ds] = b["rmse"] if isinstance(b, dict) else b
 
     return vanilla_rmse, booster_rmse
 
 
+def _get_rmse_mean(results, ds, method):
+    """Get mean RMSE, handling both old (scalar) and new (dict with rmse list) formats."""
+    val = results.get(ds, {}).get(method)
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        arr = val.get("rmse", [])
+        return float(np.mean(arr)) if arr else None
+    return float(val)
+
+
 def run_experiments(args):
-    """Run all baseline experiments across 16 datasets."""
-    # Load any previously saved results for crash recovery
+    """Run all baseline experiments across 16 datasets × 5 seeds."""
+    # Load existing results to preserve ARIMA when --skip-arima
     if RESULTS_PATH.exists():
         with open(RESULTS_PATH) as f:
             results = json.load(f)
-        print(f"Loaded existing results from {RESULTS_PATH}")
     else:
         results = {}
 
-    # Load DL results
+    # Load DL results (already 5-seed arrays)
     vanilla_rmse, booster_rmse = load_existing_dl_results()
 
     for ds in ALL_DATASETS:
-        if ds not in results:
-            results[ds] = {}
-
-        # Store DL results
-        if ds in vanilla_rmse:
-            results[ds]["Linear"] = vanilla_rmse[ds]
-        if ds in booster_rmse:
-            results[ds]["Linear+TSB"] = booster_rmse[ds]
-
-        # Skip if all baselines already computed
-        needed = ["XGBoost", "LightGBM"]
-        if not args.skip_arima:
-            needed.append("ARIMA")
-        if all(k in results[ds] for k in needed):
-            print(f"  {ds:12s} | Already computed, skipping")
-            continue
-
         print(f"\n{'='*60}")
         print(f"  Dataset: {ds}")
         print(f"{'='*60}")
+
+        # Preserve existing ARIMA results when --skip-arima
+        existing_arima = None
+        if args.skip_arima and ds in results and "ARIMA" in results[ds]:
+            existing_arima = results[ds]["ARIMA"]
+
+        # Store DL results as arrays
+        results[ds] = {}
+        if ds in vanilla_rmse:
+            results[ds]["Linear"] = {"rmse": vanilla_rmse[ds]}
+        if ds in booster_rmse:
+            results[ds]["Linear+TSB"] = {"rmse": booster_rmse[ds]}
+
+        # Restore preserved ARIMA
+        if existing_arima is not None:
+            results[ds]["ARIMA"] = existing_arima
 
         data = extract_data(ds)
         if data is None:
@@ -288,38 +300,42 @@ def run_experiments(args):
 
         print(f"  Samples: train={len(data['X_train'])}, val={len(data['X_val'])}, test={len(data['X_test'])}")
 
-        # XGBoost
-        if "XGBoost" not in results[ds]:
-            t0 = time.time()
-            rmse = run_xgboost(data)
-            elapsed = time.time() - t0
-            results[ds]["XGBoost"] = rmse
-            print(f"  XGBoost   : RMSE={rmse:.6f}  ({elapsed:.1f}s)")
+        # XGBoost — 5 seeds
+        t0 = time.time()
+        xgb_rmses = []
+        for seed in SEEDS:
+            rmse = run_xgboost(data, seed=seed)
+            xgb_rmses.append(rmse)
+        results[ds]["XGBoost"] = {"rmse": xgb_rmses}
+        elapsed = time.time() - t0
+        print(f"  XGBoost    : mean={np.mean(xgb_rmses):.4f} ± {np.std(xgb_rmses):.4f}  ({elapsed:.1f}s, {len(SEEDS)} seeds)")
 
-        # LightGBM
-        if "LightGBM" not in results[ds]:
-            t0 = time.time()
-            rmse = run_lightgbm(data)
-            elapsed = time.time() - t0
-            results[ds]["LightGBM"] = rmse
-            print(f"  LightGBM  : RMSE={rmse:.6f}  ({elapsed:.1f}s)")
+        # LightGBM — 5 seeds
+        t0 = time.time()
+        lgb_rmses = []
+        for seed in SEEDS:
+            rmse = run_lightgbm(data, seed=seed)
+            lgb_rmses.append(rmse)
+        results[ds]["LightGBM"] = {"rmse": lgb_rmses}
+        elapsed = time.time() - t0
+        print(f"  LightGBM   : mean={np.mean(lgb_rmses):.4f} ± {np.std(lgb_rmses):.4f}  ({elapsed:.1f}s, {len(SEEDS)} seeds)")
 
-        # ARIMA
-        if not args.skip_arima and "ARIMA" not in results[ds]:
+        # ARIMA — deterministic (1 run)
+        if not args.skip_arima:
             t0 = time.time()
             rmse = run_arima(data)
             elapsed = time.time() - t0
             if rmse is not None:
-                results[ds]["ARIMA"] = rmse
-                print(f"  ARIMA     : RMSE={rmse:.6f}  ({elapsed:.1f}s)")
+                results[ds]["ARIMA"] = {"rmse": [rmse]}
+                print(f"  ARIMA      : RMSE={rmse:.4f}  ({elapsed:.1f}s, deterministic)")
             else:
-                print(f"  ARIMA     : SKIP (insufficient test data)")
+                print(f"  ARIMA      : SKIP (insufficient test data)")
 
-        # DL results summary
+        # DL summary
         if ds in vanilla_rmse:
-            print(f"  Linear    : RMSE={vanilla_rmse[ds]:.6f}  (from 5-seed mean)")
+            print(f"  Linear     : mean={np.mean(vanilla_rmse[ds]):.4f} ± {np.std(vanilla_rmse[ds]):.4f}  (5 seeds)")
         if ds in booster_rmse:
-            print(f"  Linear+TSB: RMSE={booster_rmse[ds]:.6f}  (from 5-seed mean)")
+            print(f"  Linear+TSB : mean={np.mean(booster_rmse[ds]):.4f} ± {np.std(booster_rmse[ds]):.4f}  (5 seeds)")
 
         # Incremental save
         RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -335,7 +351,7 @@ def analyze(results):
     methods = ["ARIMA", "XGBoost", "LightGBM", "Linear", "Linear+TSB"]
 
     print("\n" + "=" * 120)
-    print("BENCHMARK BASELINES: All Methods × 16 Datasets")
+    print("BENCHMARK BASELINES: All Methods × 16 Datasets (5 seeds where applicable)")
     print("=" * 120)
 
     # --- Terminal table ---
@@ -351,23 +367,23 @@ def analyze(results):
     for ds in ALL_DATASETS:
         if ds not in results:
             continue
-        row = results[ds]
 
         line = f"  {ds:<12}"
-        rmse_values = {}
+        rmse_means = {}
 
         for m in methods:
-            if m in row and row[m] is not None:
-                line += f" | {row[m]:>12.4f}"
-                rmse_values[m] = row[m]
+            val = _get_rmse_mean(results, ds, m)
+            if val is not None:
+                line += f" | {val:>12.4f}"
+                rmse_means[m] = val
             else:
                 line += f" | {'N/A':>12}"
 
         # TSB vs best external baseline
-        external = {k: v for k, v in rmse_values.items() if k not in ("Linear", "Linear+TSB")}
-        if external and "Linear+TSB" in rmse_values:
+        external = {k: v for k, v in rmse_means.items() if k not in ("Linear", "Linear+TSB")}
+        if external and "Linear+TSB" in rmse_means:
             best_ext = min(external.values())
-            gap = (best_ext - rmse_values["Linear+TSB"]) / best_ext * 100
+            gap = (best_ext - rmse_means["Linear+TSB"]) / best_ext * 100
             tsb_vs_best_gaps.append(gap)
             tag = "WIN" if gap > 0 else "LOSS"
             line += f" | {gap:>+10.2f}% {tag}"
@@ -381,6 +397,22 @@ def analyze(results):
         wins = sum(1 for g in tsb_vs_best_gaps if g > 0)
         print(f"  TSB vs Best External Baseline: {wins}/{len(tsb_vs_best_gaps)} wins, avg gap = {np.mean(tsb_vs_best_gaps):+.2f}%")
 
+    # --- Pairwise wins ---
+    print(f"\n  TSB vs each method (RMSE wins):")
+    for m in methods:
+        if m == "Linear+TSB":
+            continue
+        wins, total = 0, 0
+        for ds in ALL_DATASETS:
+            tsb_val = _get_rmse_mean(results, ds, "Linear+TSB")
+            other_val = _get_rmse_mean(results, ds, m)
+            if tsb_val is not None and other_val is not None:
+                total += 1
+                if tsb_val < other_val:
+                    wins += 1
+        if total > 0:
+            print(f"    vs {m:<12}: {wins}/{total} ({wins/total*100:.0f}%)")
+
     # --- Category breakdown ---
     print(f"\n{'='*80}")
     print("CATEGORY BREAKDOWN")
@@ -390,11 +422,10 @@ def analyze(results):
         print(f"\n  {cat_name}:")
         cat_means = {m: [] for m in methods}
         for ds in cat_datasets:
-            if ds not in results:
-                continue
             for m in methods:
-                if m in results[ds] and results[ds][m] is not None:
-                    cat_means[m].append(results[ds][m])
+                val = _get_rmse_mean(results, ds, m)
+                if val is not None:
+                    cat_means[m].append(val)
 
         line = "    Avg RMSE:"
         for m in methods:
@@ -413,8 +444,9 @@ def analyze(results):
             continue
         available = {}
         for m in methods:
-            if m in results[ds] and results[ds][m] is not None:
-                available[m] = results[ds][m]
+            val = _get_rmse_mean(results, ds, m)
+            if val is not None:
+                available[m] = val
         if not available:
             continue
         sorted_methods = sorted(available, key=lambda k: available[k])
@@ -433,7 +465,7 @@ def analyze(results):
     print()
     print(r"\begin{table}[htbp]")
     print(r"\centering")
-    print(r"\caption{RMSE comparison across baselines and TS-Booster on 16 datasets.}")
+    print(r"\caption{RMSE comparison across baselines and TS-Booster on 16 datasets (5-seed mean).}")
     print(r"\label{tab:baselines}")
     print(r"\resizebox{\textwidth}{!}{")
     print(r"\begin{tabular}{l" + "r" * len(methods) + "}")
@@ -444,20 +476,19 @@ def analyze(results):
     for ds in ALL_DATASETS:
         if ds not in results:
             continue
-        row = results[ds]
         ds_latex = ds.replace("_", r"\_")
 
-        # Find best (lowest) RMSE for bolding
         available_rmse = {}
         for m in methods:
-            if m in row and row[m] is not None:
-                available_rmse[m] = row[m]
+            val = _get_rmse_mean(results, ds, m)
+            if val is not None:
+                available_rmse[m] = val
         best_rmse = min(available_rmse.values()) if available_rmse else None
 
         cells = []
         for m in methods:
-            if m in row and row[m] is not None:
-                val = row[m]
+            val = _get_rmse_mean(results, ds, m)
+            if val is not None:
                 if best_rmse is not None and abs(val - best_rmse) < 1e-8:
                     cells.append(r"\textbf{" + f"{val:.4f}" + "}")
                 else:
@@ -470,13 +501,25 @@ def analyze(results):
     # Average row
     print(r"\midrule")
     avg_cells = []
+    avg_rmse = {}
     for m in methods:
-        vals = [results[ds][m] for ds in ALL_DATASETS if ds in results and m in results[ds] and results[ds][m] is not None]
+        vals = [_get_rmse_mean(results, ds, m) for ds in ALL_DATASETS]
+        vals = [v for v in vals if v is not None]
         if vals:
             avg = np.mean(vals)
+            avg_rmse[m] = avg
             avg_cells.append(f"{avg:.4f}")
         else:
             avg_cells.append("--")
+    if avg_rmse:
+        best_avg = min(avg_rmse.values())
+        avg_cells_final = []
+        for m, c in zip(methods, avg_cells):
+            if m in avg_rmse and abs(avg_rmse[m] - best_avg) < 1e-8:
+                avg_cells_final.append(r"\textbf{" + c + "}")
+            else:
+                avg_cells_final.append(c)
+        avg_cells = avg_cells_final
     print(r"\textit{Average} & " + " & ".join(avg_cells) + r" \\")
 
     # Average rank row
@@ -507,13 +550,14 @@ def plot_tsb_vs_best_baseline(results):
 
     datasets, diffs, colors, best_names = [], [], [], []
     for ds in ALL_DATASETS:
-        if ds not in results or "Linear+TSB" not in results[ds]:
+        tsb = _get_rmse_mean(results, ds, "Linear+TSB")
+        if tsb is None:
             continue
-        tsb = results[ds]["Linear+TSB"]
         ext_rmse = {}
         for m in methods_ext:
-            if m in results[ds] and results[ds][m] is not None:
-                ext_rmse[m] = results[ds][m]
+            val = _get_rmse_mean(results, ds, m)
+            if val is not None:
+                ext_rmse[m] = val
         if not ext_rmse:
             continue
         best_m = min(ext_rmse, key=lambda k: ext_rmse[k])
@@ -579,8 +623,9 @@ def plot_average_rank(results):
             continue
         available = {}
         for m in methods:
-            if m in results[ds] and results[ds][m] is not None:
-                available[m] = results[ds][m]
+            val = _get_rmse_mean(results, ds, m)
+            if val is not None:
+                available[m] = val
         if not available:
             continue
         sorted_methods = sorted(available, key=lambda k: available[k])
