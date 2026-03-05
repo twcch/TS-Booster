@@ -220,3 +220,95 @@ def train_v11(
         pass
 
     return model
+
+
+def train_baseline(
+    train_loader,
+    val_loader,
+    test_loader,
+    device,
+    model,
+    num_epochs=100,
+    lr=1e-3,
+    verbose=True,
+):
+    """Clean training loop for non-TSB baseline models.
+
+    Uses standard MSE loss + Adam optimizer (matches original papers for
+    DLinear, PatchTST, iTransformer, TimeMixer).
+    """
+    model = model.to(device)
+    criterion = torch.nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=5, threshold=0.001, min_lr=1e-6
+    )
+
+    best_val_loss = float("inf")
+    patience = 30
+    counter = 0
+
+    checkpoint_file = tempfile.NamedTemporaryFile(mode='w+b', suffix='.pth', delete=False)
+    checkpoint_path = checkpoint_file.name
+    checkpoint_file.close()
+
+    if verbose:
+        print(f"\n[Training Baseline] {model.__class__.__name__}  LR={lr}")
+
+    for epoch in range(num_epochs):
+        # Train
+        model.train()
+        losses = []
+        for batch in train_loader:
+            x = batch["raw_input"].to(device)
+            y = batch["target"].to(device)
+            optimizer.zero_grad()
+            out = model(x)
+            pred = out[0] if isinstance(out, tuple) else out
+            loss = criterion(pred, y)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+            optimizer.step()
+            losses.append(loss.item())
+
+        # Validate
+        model.eval()
+        val_losses = []
+        with torch.no_grad():
+            for batch in val_loader:
+                x = batch["raw_input"].to(device)
+                y = batch["target"].to(device)
+                out = model(x)
+                pred = out[0] if isinstance(out, tuple) else out
+                val_losses.append(criterion(pred, y).item())
+
+        train_loss = np.mean(losses)
+        val_loss = np.mean(val_losses)
+        scheduler.step(val_loss)
+
+        if verbose and ((epoch + 1) % 10 == 0 or epoch == 0):
+            current_lr = optimizer.param_groups[0]["lr"]
+            print(f"  Epoch {epoch+1:3d} | LR: {current_lr:.6f} | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
+
+        # Early stopping
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            counter = 0
+            torch.save(model.state_dict(), checkpoint_path)
+        else:
+            counter += 1
+            if counter >= patience:
+                if verbose:
+                    print(f"  [Early Stop] epoch {epoch+1}")
+                break
+
+    model.load_state_dict(torch.load(checkpoint_path, weights_only=True))
+    try:
+        os.unlink(checkpoint_path)
+    except:
+        pass
+
+    if verbose:
+        print(f"  Best val loss: {best_val_loss:.4f}")
+
+    return model
