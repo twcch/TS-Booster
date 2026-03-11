@@ -1,0 +1,42 @@
+{
+  "sota": {
+    "methods": [
+      "DLinear",
+      "PatchTST",
+      "iTransformer",
+      "Linear",
+      "Linear+TSB"
+    ],
+    "avg_ranks": [
+      4.125,
+      3.375,
+      3.125,
+      3.25,
+      1.125
+    ],
+    "friedman_chi2": 32.0,
+    "friedman_p": 1.913097970263067e-06,
+    "nemenyi_cd": 1.5249983606548567,
+    "n_datasets": 16
+  },
+  "benchmark": {
+    "methods": [
+      "ARIMA",
+      "XGBoost",
+      "LightGBM",
+      "Linear",
+      "Linear+TSB"
+    ],
+    "avg_ranks": [
+      4.0625,
+      3.5625,
+      3.0625,
+      3.1875,
+      1.125
+    ],
+    "friedman_chi2": 32.0,
+    "friedman_p": 1.913097970263067e-06,
+    "nemenyi_cd": 1.5249983606548567,
+    "n_datasets": 16
+  }
+}
