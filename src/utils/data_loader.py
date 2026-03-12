@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, Dataset
@@ -21,7 +22,8 @@ class VolatilityDataset(Dataset):
         }
 
 
-def prepare_data(df, lookback=30, horizon=3, batch_size=32, mode="raw"):
+def prepare_data(df, lookback=30, horizon=3, batch_size=32, mode="raw",
+                 train_end_date=None, val_end_date=None):
     df = df.copy()
     vol_window = 7
 
@@ -38,8 +40,14 @@ def prepare_data(df, lookback=30, horizon=3, batch_size=32, mode="raw"):
 
     # === 防止 Data Leakage (只用訓練集 fit) ===
     n_samples = len(features)
-    split_1 = int(n_samples * 0.70)
-    split_2 = int(n_samples * 0.80)
+    if train_end_date is not None and val_end_date is not None:
+        # Date-based split: requires 'Date' column in df
+        dates = pd.to_datetime(df["Date"])
+        split_1 = int((dates <= train_end_date).sum())
+        split_2 = int((dates <= val_end_date).sum())
+    else:
+        split_1 = int(n_samples * 0.70)
+        split_2 = int(n_samples * 0.80)
 
     scaler = StandardScaler()
     scaler.fit(features[:split_1])

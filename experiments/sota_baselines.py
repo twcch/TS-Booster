@@ -698,13 +698,32 @@ def plot_metric_comparison(results, metric, higher_is_better=False):
 
     fig, ax = plt.subplots(figsize=(max(14, n_ds * 0.9), 6))
 
+    # Find best method per dataset
+    best_per_ds = {}
+    for i, ds in enumerate(datasets_with_data):
+        ds_vals = {}
+        for m in methods:
+            v = _get_metric_mean(results, ds, m, metric)
+            if v is not None:
+                ds_vals[m] = v
+        if ds_vals:
+            best_per_ds[i] = max(ds_vals, key=lambda k: ds_vals[k]) if higher_is_better else min(ds_vals, key=lambda k: ds_vals[k])
+
+    bar_containers = []
     for j, (m, color) in enumerate(zip(methods, method_colors)):
         vals = []
         for ds in datasets_with_data:
             v = _get_metric_mean(results, ds, m, metric)
             vals.append(v if v is not None else 0)
         offset = (j - n_methods / 2 + 0.5) * bar_width
-        ax.bar(x + offset, vals, bar_width, label=m, color=color, edgecolor='white', linewidth=0.5)
+        bars = ax.bar(x + offset, vals, bar_width, label=m, color=color, edgecolor='white', linewidth=0.5)
+        bar_containers.append((m, bars))
+
+    # Dim non-best bars
+    for m, bars in bar_containers:
+        for i, bar in enumerate(bars):
+            if best_per_ds.get(i) != m:
+                bar.set_alpha(0.35)
 
     metric_upper = metric.upper()
     better = "higher" if higher_is_better else "lower"

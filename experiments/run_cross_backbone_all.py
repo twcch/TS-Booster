@@ -355,27 +355,29 @@ def plot_per_dataset(all_results, output_dir):
     print(f"  Saved: {len([ds for ds in ALL_DATASETS if ds in all_results])} per-dataset bar charts")
 
 
-def plot_summary(all_results, output_dir):
-    """Summary heatmap + grouped bar chart across all datasets and backbones."""
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    import matplotlib.colors as mcolors
-
+def _build_improvement_matrix(all_results, metric, higher_is_better=False):
+    """Build improvement % matrix for a given metric across datasets × backbones."""
     datasets = [ds for ds in ALL_DATASETS if ds in all_results]
     backbones = list(BACKBONES.keys())
-
-    # Build improvement matrix
     matrix = np.zeros((len(datasets), len(backbones)))
     for i, ds in enumerate(datasets):
         for j, bb in enumerate(backbones):
             if bb in all_results[ds]:
                 entry = all_results[ds][bb]
-                v_mean = _get_mean(entry['vanilla_rmse'])
-                b_mean = _get_mean(entry['boosted_rmse'])
-                matrix[i, j] = (v_mean - b_mean) / v_mean * 100
+                v_mean = _get_mean(entry[f'vanilla_{metric}'])
+                b_mean = _get_mean(entry[f'boosted_{metric}'])
+                if higher_is_better:
+                    matrix[i, j] = (b_mean - v_mean) / v_mean * 100
+                else:
+                    matrix[i, j] = (v_mean - b_mean) / v_mean * 100
+    return matrix, datasets, backbones
 
-    # === Figure 1: Heatmap ===
+
+def _plot_heatmap(matrix, datasets, backbones, metric, output_dir):
+    """Plot a single heatmap for a given metric."""
+    import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
+
     fig, ax = plt.subplots(figsize=(10, 12))
     cmap = mcolors.LinearSegmentedColormap.from_list('rg',
         ['#EF5350', '#FFCDD2', '#FFFFFF', '#C8E6C9', '#43A047'], N=256)
@@ -417,36 +419,55 @@ def plot_summary(all_results, output_dir):
         ax.text(len(backbones) + 0.2, i, f'{wins}/4', ha='left', va='center',
                fontsize=9, fontweight='bold', color=color)
 
-    ax.set_title('Cross-Backbone Validation: TS-Booster RMSE Improvement (%)\n'
-                'Vanilla → + TS-Booster (5-seed mean, per backbone, per dataset)',
+    metric_upper = metric.upper()
+    ax.set_title(f'Cross-Backbone Validation: TS-Booster {metric_upper} Improvement (%)\n'
+                f'Vanilla → + TS-Booster (5-seed mean, per backbone, per dataset)',
                 fontsize=13, fontweight='bold', pad=15)
 
     cbar = plt.colorbar(im, ax=ax, shrink=0.7, pad=0.12)
-    cbar.set_label('RMSE Improvement (%)', fontsize=10)
+    cbar.set_label(f'{metric_upper} Improvement (%)', fontsize=10)
 
     plt.tight_layout()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_dir / 'cross_backbone_summary_heatmap.png',
-               dpi=200, bbox_inches='tight', facecolor='white')
+    fname = f'cross_backbone_summary_heatmap_{metric}.png'
+    plt.savefig(output_dir / fname, dpi=200, bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: cross_backbone_summary_heatmap.png")
+    print(f"  Saved: {fname}")
 
-    # === Figure 2: Grouped bar chart ===
+
+def _plot_bars(matrix, datasets, backbones, metric, output_dir):
+    """Plot a grouped bar chart for a given metric."""
+    import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=(14, 6))
     x = np.arange(len(datasets))
     width = 0.2
     colors = ['#42A5F5', '#66BB6A', '#FFA726', '#AB47BC']
 
+    # Find best backbone per dataset (highest improvement)
+    best_per_ds = {}
+    for i in range(len(datasets)):
+        best_j = int(np.argmax(matrix[i, :]))
+        best_per_ds[i] = best_j
+
+    bar_containers = []
     for j, (bb, color) in enumerate(zip(backbones, colors)):
         vals = [matrix[i, j] for i in range(len(datasets))]
         offset = (j - 1.5) * width
-        ax.bar(x + offset, vals, width, label=bb, color=color,
-               edgecolor='#37474F', linewidth=0.8, alpha=0.85)
+        bars = ax.bar(x + offset, vals, width, label=bb, color=color,
+               edgecolor='#37474F', linewidth=0.8)
+        bar_containers.append((j, bars))
 
+    # Dim non-best bars
+    for j, bars in bar_containers:
+        for i, bar in enumerate(bars):
+            if best_per_ds.get(i) != j:
+                bar.set_alpha(0.35)
+
+    metric_upper = metric.upper()
     ax.axhline(y=0, color='#9E9E9E', linewidth=1, linestyle='--')
     ax.set_xlabel('Dataset', fontsize=11)
-    ax.set_ylabel('RMSE Improvement (%)', fontsize=11)
-    ax.set_title('Cross-Backbone: TS-Booster Improvement by Dataset & Backbone (5-seed mean)',
+    ax.set_ylabel(f'{metric_upper} Improvement (%)', fontsize=11)
+    ax.set_title(f'Cross-Backbone: TS-Booster {metric_upper} Improvement by Dataset & Backbone (5-seed mean)',
                 fontsize=13, fontweight='bold')
     ax.set_xticks(x)
     ax.set_xticklabels(datasets, rotation=45, ha='right', fontsize=9)
@@ -454,10 +475,32 @@ def plot_summary(all_results, output_dir):
     ax.grid(axis='y', alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(output_dir / 'cross_backbone_summary_bars.png',
-               dpi=200, bbox_inches='tight', facecolor='white')
+    fname = f'cross_backbone_summary_bars_{metric}.png'
+    plt.savefig(output_dir / fname, dpi=200, bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Saved: cross_backbone_summary_bars.png")
+    print(f"  Saved: {fname}")
+
+
+def plot_summary(all_results, output_dir):
+    """Summary heatmaps + grouped bar charts for RMSE, MAE, MDA."""
+    import matplotlib
+    matplotlib.use('Agg')
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for metric, higher_is_better in [('rmse', False), ('mae', False), ('mda', True)]:
+        # Check if metric data exists
+        ds0 = next((ds for ds in ALL_DATASETS if ds in all_results), None)
+        if ds0 is None:
+            continue
+        bb0 = next(iter(all_results[ds0]))
+        if f'vanilla_{metric}' not in all_results[ds0][bb0]:
+            print(f"  SKIP {metric} (no data)")
+            continue
+
+        matrix, datasets, backbones = _build_improvement_matrix(all_results, metric, higher_is_better)
+        _plot_heatmap(matrix, datasets, backbones, metric, output_dir)
+        _plot_bars(matrix, datasets, backbones, metric, output_dir)
 
 
 if __name__ == "__main__":
