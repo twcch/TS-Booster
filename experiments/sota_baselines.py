@@ -106,7 +106,7 @@ def evaluate(model, test_loader, scaler, device):
 
 
 def load_existing_dl_results():
-    """Load vanilla/booster RMSE arrays from saved 5-seed results."""
+    """Load vanilla/booster metrics from saved 5-seed results."""
     if not DL_RESULTS_PATH.exists():
         print(f"WARNING: {DL_RESULTS_PATH} not found. Linear/TSB results will be missing.")
         return {}, {}
@@ -114,41 +114,51 @@ def load_existing_dl_results():
     with open(DL_RESULTS_PATH) as f:
         raw = json.load(f)
 
-    vanilla_rmse = {}
-    booster_rmse = {}
+    vanilla_metrics = {}
+    booster_metrics = {}
     for ds in ALL_DATASETS:
         if ds in raw:
             v = raw[ds]["vanilla"]
             b = raw[ds]["booster"]
-            vanilla_rmse[ds] = v["rmse"] if isinstance(v, dict) else v
-            booster_rmse[ds] = b["rmse"] if isinstance(b, dict) else b
+            if isinstance(v, dict):
+                vanilla_metrics[ds] = {k: v[k] for k in ["rmse", "mae", "mda"] if k in v}
+            else:
+                vanilla_metrics[ds] = {"rmse": v}
+            if isinstance(b, dict):
+                booster_metrics[ds] = {k: b[k] for k in ["rmse", "mae", "mda"] if k in b}
+            else:
+                booster_metrics[ds] = {"rmse": b}
 
-    return vanilla_rmse, booster_rmse
+    return vanilla_metrics, booster_metrics
 
 
-def _get_rmse_mean(results, ds, method):
-    """Get mean RMSE from results dict."""
+def _get_metric_mean(results, ds, method, metric="rmse"):
+    """Get mean of a metric from results dict."""
     val = results.get(ds, {}).get(method)
     if val is None:
         return None
     if isinstance(val, dict):
-        arr = val.get("rmse", [])
+        arr = val.get(metric, [])
         return float(np.mean(arr)) if arr else None
-    if isinstance(val, list):
-        return float(np.mean(val)) if val else None
-    return float(val)
+    if metric == "rmse":
+        if isinstance(val, list):
+            return float(np.mean(val)) if val else None
+        return float(val)
+    return None
 
 
-def _get_rmse_list(results, ds, method):
-    """Get RMSE list from results dict."""
+def _get_metric_list(results, ds, method, metric="rmse"):
+    """Get list of a metric from results dict."""
     val = results.get(ds, {}).get(method)
     if val is None:
         return None
     if isinstance(val, dict):
-        return val.get("rmse", None)
-    if isinstance(val, list):
-        return val
-    return [val]
+        return val.get(metric, None)
+    if metric == "rmse":
+        if isinstance(val, list):
+            return val
+        return [val]
+    return None
 
 
 def run_single_model(model_name, ds, seed, device):
@@ -198,14 +208,14 @@ def run_experiments(args):
         results = {}
 
     # Load Linear/TSB results
-    vanilla_rmse, booster_rmse = load_existing_dl_results()
+    vanilla_metrics, booster_metrics = load_existing_dl_results()
     for ds in ALL_DATASETS:
         if ds not in results:
             results[ds] = {}
-        if ds in vanilla_rmse:
-            results[ds]["Linear"] = {"rmse": vanilla_rmse[ds]}
-        if ds in booster_rmse:
-            results[ds]["Linear+TSB"] = {"rmse": booster_rmse[ds]}
+        if ds in vanilla_metrics:
+            results[ds]["Linear"] = vanilla_metrics[ds]
+        if ds in booster_metrics:
+            results[ds]["Linear+TSB"] = booster_metrics[ds]
 
     total_runs = len(models_to_run) * len(ALL_DATASETS) * len(SEEDS)
     run_count = 0
@@ -226,14 +236,15 @@ def run_experiments(args):
             print(f"\n  {'='*50}")
             print(f"  Dataset: {ds}")
 
-            # Check if already completed (all 5 seeds present)
-            existing = _get_rmse_list(results, ds, model_name)
-            if existing and len(existing) >= len(SEEDS):
+            # Check if already completed (all 5 seeds present with all metrics)
+            existing = _get_metric_list(results, ds, model_name, "rmse")
+            existing_mae = _get_metric_list(results, ds, model_name, "mae")
+            if existing and len(existing) >= len(SEEDS) and existing_mae and len(existing_mae) >= len(SEEDS):
                 run_count += len(SEEDS)
-                print(f"  SKIP (already have {len(existing)} seeds)")
+                print(f"  SKIP (already have {len(existing)} seeds with all metrics)")
                 continue
 
-            rmses = []
+            seed_metrics = {"rmse": [], "mae": [], "mda": []}
             for seed in SEEDS:
                 run_count += 1
                 t0 = time.time()
@@ -244,13 +255,14 @@ def run_experiments(args):
                     print("SKIP (file not found)")
                     continue
 
-                rmses.append(metrics["rmse"])
+                for k in seed_metrics:
+                    seed_metrics[k].append(metrics[k])
                 elapsed = time.time() - t0
-                print(f"RMSE={metrics['rmse']:.4f} ({elapsed:.1f}s)")
+                print(f"RMSE={metrics['rmse']:.4f} MAE={metrics['mae']:.4f} MDA={metrics['mda']:.4f} ({elapsed:.1f}s)")
 
-            if rmses:
-                results[ds][model_name] = {"rmse": rmses}
-                print(f"  {model_name}: mean={np.mean(rmses):.4f} +/- {np.std(rmses):.4f}")
+            if seed_metrics["rmse"]:
+                results[ds][model_name] = seed_metrics
+                print(f"  {model_name}: RMSE={np.mean(seed_metrics['rmse']):.4f} MAE={np.mean(seed_metrics['mae']):.4f} MDA={np.mean(seed_metrics['mda']):.4f}")
 
                 # Incremental save
                 RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -293,7 +305,7 @@ def analyze(results):
         rmse_means = {}
 
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 rmse_means[m] = val
                 line += f" | {val:>14.4f}"
@@ -326,8 +338,8 @@ def analyze(results):
             continue
         wins, total = 0, 0
         for ds in ALL_DATASETS:
-            tsb_val = _get_rmse_mean(results, ds, "Linear+TSB")
-            other_val = _get_rmse_mean(results, ds, m)
+            tsb_val = _get_metric_mean(results, ds, "Linear+TSB")
+            other_val = _get_metric_mean(results, ds, m)
             if tsb_val is not None and other_val is not None:
                 total += 1
                 if tsb_val < other_val:
@@ -346,8 +358,8 @@ def analyze(results):
         sig_wins = 0
         tested = 0
         for ds in ALL_DATASETS:
-            tsb_list = _get_rmse_list(results, ds, "Linear+TSB")
-            other_list = _get_rmse_list(results, ds, m)
+            tsb_list = _get_metric_list(results, ds, "Linear+TSB")
+            other_list = _get_metric_list(results, ds, m)
             if tsb_list is None or other_list is None:
                 continue
             if len(tsb_list) < 2 or len(other_list) < 2:
@@ -374,7 +386,7 @@ def analyze(results):
         cat_means = {m: [] for m in methods}
         for ds in cat_datasets:
             for m in methods:
-                val = _get_rmse_mean(results, ds, m)
+                val = _get_metric_mean(results, ds, m)
                 if val is not None:
                     cat_means[m].append(val)
 
@@ -395,7 +407,7 @@ def analyze(results):
             continue
         available = {}
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 available[m] = val
         if not available:
@@ -431,14 +443,14 @@ def analyze(results):
 
         available_rmse = {}
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 available_rmse[m] = val
         best_rmse = min(available_rmse.values()) if available_rmse else None
 
         cells = []
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 if best_rmse is not None and abs(val - best_rmse) < 1e-8:
                     cells.append(r"\textbf{" + f"{val:.4f}" + "}")
@@ -454,7 +466,7 @@ def analyze(results):
     avg_rmse = {}
     avg_cells = []
     for m in methods:
-        vals = [_get_rmse_mean(results, ds, m) for ds in ALL_DATASETS]
+        vals = [_get_metric_mean(results, ds, m) for ds in ALL_DATASETS]
         vals = [v for v in vals if v is not None]
         if vals:
             avg = np.mean(vals)
@@ -503,12 +515,12 @@ def plot_tsb_vs_sota(results):
 
     datasets, diffs, colors, best_names = [], [], [], []
     for ds in ALL_DATASETS:
-        tsb = _get_rmse_mean(results, ds, "Linear+TSB")
+        tsb = _get_metric_mean(results, ds, "Linear+TSB")
         if tsb is None:
             continue
         ext_rmse = {}
         for m in sota_methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 ext_rmse[m] = val
         if not ext_rmse:
@@ -569,7 +581,7 @@ def plot_average_rank(results):
             continue
         available = {}
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 available[m] = val
         if not available:
@@ -617,13 +629,13 @@ def plot_heatmap(results):
     data_matrix = []
     ds_labels = []
     for ds in ALL_DATASETS:
-        tsb = _get_rmse_mean(results, ds, "Linear+TSB")
+        tsb = _get_metric_mean(results, ds, "Linear+TSB")
         if tsb is None:
             continue
         row = []
         has_data = False
         for m in sota_methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 gap = (val - tsb) / val * 100
                 row.append(gap)
@@ -664,6 +676,52 @@ def plot_heatmap(results):
     print("  Saved: sota_heatmap.png")
 
 
+def plot_metric_comparison(results, metric, higher_is_better=False):
+    """Grouped bar chart: all methods × 16 datasets for a given metric."""
+    methods = ["DLinear", "PatchTST", "iTransformer", "Linear", "Linear+TSB"]
+    method_colors = ["#FF9800", "#03A9F4", "#E91E63", "#42A5F5", "#AB47BC"]
+
+    datasets_with_data = []
+    for ds in ALL_DATASETS:
+        has_any = any(_get_metric_mean(results, ds, m, metric) is not None for m in methods)
+        if has_any:
+            datasets_with_data.append(ds)
+
+    if not datasets_with_data:
+        print(f"  SKIP {metric} chart (no data)")
+        return
+
+    n_ds = len(datasets_with_data)
+    n_methods = len(methods)
+    bar_width = 0.15
+    x = np.arange(n_ds)
+
+    fig, ax = plt.subplots(figsize=(max(14, n_ds * 0.9), 6))
+
+    for j, (m, color) in enumerate(zip(methods, method_colors)):
+        vals = []
+        for ds in datasets_with_data:
+            v = _get_metric_mean(results, ds, m, metric)
+            vals.append(v if v is not None else 0)
+        offset = (j - n_methods / 2 + 0.5) * bar_width
+        ax.bar(x + offset, vals, bar_width, label=m, color=color, edgecolor='white', linewidth=0.5)
+
+    metric_upper = metric.upper()
+    better = "higher" if higher_is_better else "lower"
+    ax.set_xlabel('Dataset', fontsize=11)
+    ax.set_ylabel(f'{metric_upper} ({better} is better)', fontsize=11)
+    ax.set_title(f'{metric_upper} Comparison: SOTA DL Models × 16 Datasets', fontsize=13, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(datasets_with_data, fontsize=8, rotation=45, ha='right')
+    ax.legend(fontsize=9, loc='upper right')
+    ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(FIGURES_DIR / f'sota_{metric}.png', dpi=200, bbox_inches='tight', facecolor='white')
+    plt.close()
+    print(f"  Saved: sota_{metric}.png")
+
+
 def generate_figures(results):
     """Generate all SOTA benchmark figures."""
     print("\nGenerating figures...")
@@ -671,6 +729,9 @@ def generate_figures(results):
     plot_tsb_vs_sota(results)
     plot_average_rank(results)
     plot_heatmap(results)
+    plot_metric_comparison(results, "rmse", higher_is_better=False)
+    plot_metric_comparison(results, "mae", higher_is_better=False)
+    plot_metric_comparison(results, "mda", higher_is_better=True)
     print(f"Figures saved to {FIGURES_DIR}/")
 
 

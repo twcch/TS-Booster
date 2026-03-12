@@ -59,8 +59,9 @@ def set_seed(seed=42):
 
 
 def evaluate(model, test_loader, scaler, device):
+    """Return dict with rmse, mae, mda."""
     model.eval()
-    preds, targets = [], []
+    preds, targets, last_obs_list = [], [], []
     with torch.no_grad():
         for batch in test_loader:
             x = batch["raw_input"].to(device)
@@ -69,12 +70,24 @@ def evaluate(model, test_loader, scaler, device):
             pred = output[0] if isinstance(output, tuple) else output
             preds.append(pred.cpu().numpy())
             targets.append(y.cpu().numpy())
+            last_obs_list.append(x[:, -1, 0].cpu().numpy())
     preds = np.concatenate(preds)
     targets = np.concatenate(targets)
+    last_obs = np.concatenate(last_obs_list)
+    if preds.ndim == 3:
+        preds = preds.squeeze(-1)
+    if targets.ndim == 3:
+        targets = targets.squeeze(-1)
     if scaler:
         preds = preds * scaler.scale_[0] + scaler.mean_[0]
         targets = targets * scaler.scale_[0] + scaler.mean_[0]
-    return np.sqrt(mean_squared_error(targets.flatten(), preds.flatten()))
+        last_obs = last_obs * scaler.scale_[0] + scaler.mean_[0]
+    rmse = float(np.sqrt(mean_squared_error(targets.flatten(), preds.flatten())))
+    mae = float(np.mean(np.abs(targets.flatten() - preds.flatten())))
+    pred_dir = np.sign(preds - last_obs[:, None])
+    actual_dir = np.sign(targets - last_obs[:, None])
+    mda = float(np.mean(pred_dir == actual_dir))
+    return {"rmse": rmse, "mae": mae, "mda": mda}
 
 
 def _get_mean(val):
@@ -85,21 +98,21 @@ def _get_mean(val):
 
 
 def _is_complete(results, ds):
-    """Check if a dataset has complete 5-seed results for all backbones."""
+    """Check if a dataset has complete 5-seed results with all metrics for all backbones."""
     if ds not in results:
         return False
     for bb in BACKBONES:
         if bb not in results[ds]:
             return False
         entry = results[ds][bb]
-        v = entry.get('vanilla_rmse')
-        b = entry.get('boosted_rmse')
-        if v is None or b is None:
-            return False
-        if isinstance(v, list) and len(v) >= len(SEEDS) and isinstance(b, list) and len(b) >= len(SEEDS):
-            continue
-        else:
-            return False
+        # Check all 3 metrics exist with enough seeds
+        for metric in ['rmse', 'mae', 'mda']:
+            v = entry.get(f'vanilla_{metric}')
+            b = entry.get(f'boosted_{metric}')
+            if v is None or b is None:
+                return False
+            if not (isinstance(v, list) and len(v) >= len(SEEDS) and isinstance(b, list) and len(b) >= len(SEEDS)):
+                return False
     return True
 
 
@@ -122,8 +135,8 @@ def run_cross_backbone(dataset_name, device):
     results = {}
 
     for bb_name, bb_fn in BACKBONES.items():
-        vanilla_rmses = []
-        boosted_rmses = []
+        vanilla_metrics = {"rmse": [], "mae": [], "mda": []}
+        boosted_metrics = {"rmse": [], "mae": [], "mda": []}
 
         t0 = time.time()
 
@@ -134,8 +147,9 @@ def run_cross_backbone(dataset_name, device):
             vanilla = train_v11(train_loader, val_loader, test_loader,
                                device=device, horizon=pred_len, config=config,
                                seq_len=seq_len, verbose=False, model=vanilla)
-            v_rmse = evaluate(vanilla, test_loader, scaler, device)
-            vanilla_rmses.append(float(v_rmse))
+            v_metrics = evaluate(vanilla, test_loader, scaler, device)
+            for k in vanilla_metrics:
+                vanilla_metrics[k].append(v_metrics[k])
 
             # TS-Booster
             set_seed(seed)
@@ -154,27 +168,32 @@ def run_cross_backbone(dataset_name, device):
             boosted = train_v11(train_loader, val_loader, test_loader,
                                device=device, horizon=pred_len, config=config,
                                seq_len=seq_len, verbose=False, model=boosted)
-            b_rmse = evaluate(boosted, test_loader, scaler, device)
-            boosted_rmses.append(float(b_rmse))
+            b_metrics = evaluate(boosted, test_loader, scaler, device)
+            for k in boosted_metrics:
+                boosted_metrics[k].append(b_metrics[k])
 
             # Free GPU memory
             del vanilla, boosted
             torch.cuda.empty_cache()
 
         elapsed = time.time() - t0
-        v_mean = np.mean(vanilla_rmses)
-        b_mean = np.mean(boosted_rmses)
+        v_mean = np.mean(vanilla_metrics["rmse"])
+        b_mean = np.mean(boosted_metrics["rmse"])
         gap = (v_mean - b_mean) / v_mean * 100
         win = "WIN" if gap > 0 else "LOSS"
 
         results[bb_name] = {
-            'vanilla_rmse': vanilla_rmses,
-            'boosted_rmse': boosted_rmses,
+            'vanilla_rmse': vanilla_metrics["rmse"],
+            'boosted_rmse': boosted_metrics["rmse"],
+            'vanilla_mae': vanilla_metrics["mae"],
+            'boosted_mae': boosted_metrics["mae"],
+            'vanilla_mda': vanilla_metrics["mda"],
+            'boosted_mda': boosted_metrics["mda"],
         }
 
         print(f"  {dataset_name:12s} | {bb_name:12s} | "
-              f"V: {v_mean:.4f}±{np.std(vanilla_rmses):.4f} | "
-              f"B: {b_mean:.4f}±{np.std(boosted_rmses):.4f} | "
+              f"V: {v_mean:.4f}±{np.std(vanilla_metrics['rmse']):.4f} | "
+              f"B: {b_mean:.4f}±{np.std(boosted_metrics['rmse']):.4f} | "
               f"{gap:+6.2f}% {win}  ({elapsed:.0f}s)")
 
     return results
