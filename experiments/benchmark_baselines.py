@@ -89,6 +89,9 @@ def extract_data(ds):
     X_val, y_val = create_sequences(val_feat, LOOKBACK, HORIZON)
     X_test, y_test = create_sequences(test_feat, LOOKBACK, HORIZON)
 
+    # Last observation (volatility) for each test sample — for MDA
+    last_obs_test = X_test[:, -1, 0]  # scaled volatility at t
+
     # Raw volatility series for ARIMA (unscaled)
     vol_series = df["Volatility"].values
     vol_train_end = split_1
@@ -98,6 +101,7 @@ def extract_data(ds):
         "X_train": X_train, "y_train": y_train,
         "X_val": X_val, "y_val": y_val,
         "X_test": X_test, "y_test": y_test,
+        "last_obs_test": last_obs_test,
         "scaler": scaler,
         "vol_series": vol_series,
         "vol_train_end": vol_train_end,
@@ -105,16 +109,38 @@ def extract_data(ds):
     }
 
 
-def compute_rmse(preds, targets, scaler):
-    """Inverse-transform volatility predictions and compute RMSE."""
-    # scaler was fit on [Volatility, log_return]; volatility is col 0
+def compute_metrics(preds, targets, scaler, last_obs=None):
+    """Inverse-transform volatility predictions and compute RMSE, MAE, MDA."""
     preds_inv = preds * scaler.scale_[0] + scaler.mean_[0]
     targets_inv = targets * scaler.scale_[0] + scaler.mean_[0]
-    return np.sqrt(mean_squared_error(targets_inv.flatten(), preds_inv.flatten()))
+    rmse = float(np.sqrt(mean_squared_error(targets_inv.flatten(), preds_inv.flatten())))
+    mae = float(np.mean(np.abs(targets_inv.flatten() - preds_inv.flatten())))
+    # MDA: compare direction vs last observation
+    if last_obs is not None:
+        last_obs_inv = last_obs * scaler.scale_[0] + scaler.mean_[0]
+        pred_dir = np.sign(preds_inv - last_obs_inv[:, None])
+        actual_dir = np.sign(targets_inv - last_obs_inv[:, None])
+        mda = float(np.mean(pred_dir == actual_dir))
+    else:
+        mda = None
+    return {"rmse": rmse, "mae": mae, "mda": mda}
+
+
+def compute_metrics_raw(preds, targets, last_obs=None):
+    """Compute RMSE, MAE, MDA on raw (unscaled) values."""
+    rmse = float(np.sqrt(mean_squared_error(targets.flatten(), preds.flatten())))
+    mae = float(np.mean(np.abs(targets.flatten() - preds.flatten())))
+    if last_obs is not None:
+        pred_dir = np.sign(preds - last_obs[:, None])
+        actual_dir = np.sign(targets - last_obs[:, None])
+        mda = float(np.mean(pred_dir == actual_dir))
+    else:
+        mda = None
+    return {"rmse": rmse, "mae": mae, "mda": mda}
 
 
 def run_xgboost(data, seed=42):
-    """Train 3 per-step XGBRegressors with early stopping, return RMSE."""
+    """Train 3 per-step XGBRegressors with early stopping, return metrics dict."""
     from xgboost import XGBRegressor
 
     X_train = data["X_train"].reshape(len(data["X_train"]), -1)
@@ -141,11 +167,11 @@ def run_xgboost(data, seed=42):
         )
         preds[:, step] = model.predict(X_test)
 
-    return compute_rmse(preds, data["y_test"], data["scaler"])
+    return compute_metrics(preds, data["y_test"], data["scaler"], data["last_obs_test"])
 
 
 def run_lightgbm(data, seed=42):
-    """Train 3 per-step LGBMRegressors with early stopping, return RMSE."""
+    """Train 3 per-step LGBMRegressors with early stopping, return metrics dict."""
     from lightgbm import LGBMRegressor
 
     X_train = data["X_train"].reshape(len(data["X_train"]), -1)
@@ -174,11 +200,11 @@ def run_lightgbm(data, seed=42):
         )
         preds[:, step] = model.predict(X_test)
 
-    return compute_rmse(preds, data["y_test"], data["scaler"])
+    return compute_metrics(preds, data["y_test"], data["scaler"], data["last_obs_test"])
 
 
 def run_arima(data):
-    """Fit auto_arima on train+val volatility, rolling 3-step forecast on test. Return RMSE."""
+    """Fit auto_arima on train+val volatility, rolling 3-step forecast on test. Return metrics dict."""
     from pmdarima import auto_arima
 
     vol = data["vol_series"]
@@ -205,17 +231,12 @@ def run_arima(data):
     if n_test < HORIZON:
         return None
 
-    # We need to align with the sequence-based test set
-    # Test sequences start at index 0 of test_feat and go to len-LOOKBACK-HORIZON+1
-    # But for ARIMA we forecast the raw volatility series
-    # Number of forecast windows = n_test - HORIZON + 1
     n_windows = n_test - HORIZON + 1
     preds = np.zeros((n_windows, HORIZON))
 
     for i in range(n_windows):
         fc = model.predict(n_periods=HORIZON)
         preds[i] = fc
-        # Update model with actual value (rolling)
         model.update(test_vol[i : i + 1])
 
     # Targets: raw volatility windows
@@ -223,12 +244,15 @@ def run_arima(data):
     for i in range(n_windows):
         targets[i] = test_vol[i : i + HORIZON]
 
-    # ARIMA works on raw scale, so compute RMSE directly (no inverse-transform needed)
-    return np.sqrt(mean_squared_error(targets.flatten(), preds.flatten()))
+    # Last observation for MDA (raw scale)
+    last_obs = np.array([test_vol[i] for i in range(n_windows)]) if n_windows > 0 else None
+
+    # ARIMA works on raw scale
+    return compute_metrics_raw(preds, targets, last_obs)
 
 
 def load_existing_dl_results():
-    """Load vanilla/booster RMSE arrays from saved 5-seed results."""
+    """Load vanilla/booster metrics from saved 5-seed results."""
     if not DL_RESULTS_PATH.exists():
         print(f"WARNING: {DL_RESULTS_PATH} not found. DL results will be missing.")
         return {}, {}
@@ -236,28 +260,49 @@ def load_existing_dl_results():
     with open(DL_RESULTS_PATH) as f:
         raw = json.load(f)
 
-    vanilla_rmse = {}
-    booster_rmse = {}
+    vanilla_metrics = {}
+    booster_metrics = {}
     for ds in ALL_DATASETS:
         if ds in raw:
             v = raw[ds]["vanilla"]
             b = raw[ds]["booster"]
-            # Handle both old (flat list) and new (dict) formats
-            vanilla_rmse[ds] = v["rmse"] if isinstance(v, dict) else v
-            booster_rmse[ds] = b["rmse"] if isinstance(b, dict) else b
+            if isinstance(v, dict):
+                vanilla_metrics[ds] = {k: v[k] for k in ["rmse", "mae", "mda"] if k in v}
+            else:
+                vanilla_metrics[ds] = {"rmse": v}
+            if isinstance(b, dict):
+                booster_metrics[ds] = {k: b[k] for k in ["rmse", "mae", "mda"] if k in b}
+            else:
+                booster_metrics[ds] = {"rmse": b}
 
-    return vanilla_rmse, booster_rmse
+    return vanilla_metrics, booster_metrics
 
 
-def _get_rmse_mean(results, ds, method):
-    """Get mean RMSE, handling both old (scalar) and new (dict with rmse list) formats."""
+def _get_metric_mean(results, ds, method, metric="rmse"):
+    """Get mean of a metric, handling both old (scalar) and new (dict) formats."""
     val = results.get(ds, {}).get(method)
     if val is None:
         return None
     if isinstance(val, dict):
-        arr = val.get("rmse", [])
-        return float(np.mean(arr)) if arr else None
-    return float(val)
+        arr = val.get(metric, [])
+        if not arr:
+            return None
+        return float(np.mean(arr))
+    if metric == "rmse":
+        return float(val) if not isinstance(val, list) else float(np.mean(val))
+    return None
+
+
+def _get_metric_list(results, ds, method, metric="rmse"):
+    """Get list of a metric."""
+    val = results.get(ds, {}).get(method)
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        return val.get(metric, None)
+    if metric == "rmse":
+        return val if isinstance(val, list) else [val]
+    return None
 
 
 def run_experiments(args):
@@ -270,7 +315,7 @@ def run_experiments(args):
         results = {}
 
     # Load DL results (already 5-seed arrays)
-    vanilla_rmse, booster_rmse = load_existing_dl_results()
+    vanilla_metrics, booster_metrics = load_existing_dl_results()
 
     for ds in ALL_DATASETS:
         print(f"\n{'='*60}")
@@ -282,12 +327,12 @@ def run_experiments(args):
         if args.skip_arima and ds in results and "ARIMA" in results[ds]:
             existing_arima = results[ds]["ARIMA"]
 
-        # Store DL results as arrays
+        # Store DL results
         results[ds] = {}
-        if ds in vanilla_rmse:
-            results[ds]["Linear"] = {"rmse": vanilla_rmse[ds]}
-        if ds in booster_rmse:
-            results[ds]["Linear+TSB"] = {"rmse": booster_rmse[ds]}
+        if ds in vanilla_metrics:
+            results[ds]["Linear"] = vanilla_metrics[ds]
+        if ds in booster_metrics:
+            results[ds]["Linear+TSB"] = booster_metrics[ds]
 
         # Restore preserved ARIMA
         if existing_arima is not None:
@@ -302,40 +347,42 @@ def run_experiments(args):
 
         # XGBoost — 5 seeds
         t0 = time.time()
-        xgb_rmses = []
+        xgb_metrics = {"rmse": [], "mae": [], "mda": []}
         for seed in SEEDS:
-            rmse = run_xgboost(data, seed=seed)
-            xgb_rmses.append(rmse)
-        results[ds]["XGBoost"] = {"rmse": xgb_rmses}
+            m = run_xgboost(data, seed=seed)
+            for k in xgb_metrics:
+                xgb_metrics[k].append(m[k])
+        results[ds]["XGBoost"] = xgb_metrics
         elapsed = time.time() - t0
-        print(f"  XGBoost    : mean={np.mean(xgb_rmses):.4f} ± {np.std(xgb_rmses):.4f}  ({elapsed:.1f}s, {len(SEEDS)} seeds)")
+        print(f"  XGBoost    : RMSE={np.mean(xgb_metrics['rmse']):.4f} MAE={np.mean(xgb_metrics['mae']):.4f} MDA={np.mean(xgb_metrics['mda']):.4f}  ({elapsed:.1f}s)")
 
         # LightGBM — 5 seeds
         t0 = time.time()
-        lgb_rmses = []
+        lgb_metrics = {"rmse": [], "mae": [], "mda": []}
         for seed in SEEDS:
-            rmse = run_lightgbm(data, seed=seed)
-            lgb_rmses.append(rmse)
-        results[ds]["LightGBM"] = {"rmse": lgb_rmses}
+            m = run_lightgbm(data, seed=seed)
+            for k in lgb_metrics:
+                lgb_metrics[k].append(m[k])
+        results[ds]["LightGBM"] = lgb_metrics
         elapsed = time.time() - t0
-        print(f"  LightGBM   : mean={np.mean(lgb_rmses):.4f} ± {np.std(lgb_rmses):.4f}  ({elapsed:.1f}s, {len(SEEDS)} seeds)")
+        print(f"  LightGBM   : RMSE={np.mean(lgb_metrics['rmse']):.4f} MAE={np.mean(lgb_metrics['mae']):.4f} MDA={np.mean(lgb_metrics['mda']):.4f}  ({elapsed:.1f}s)")
 
         # ARIMA — deterministic (1 run)
         if not args.skip_arima:
             t0 = time.time()
-            rmse = run_arima(data)
+            arima_m = run_arima(data)
             elapsed = time.time() - t0
-            if rmse is not None:
-                results[ds]["ARIMA"] = {"rmse": [rmse]}
-                print(f"  ARIMA      : RMSE={rmse:.4f}  ({elapsed:.1f}s, deterministic)")
+            if arima_m is not None:
+                results[ds]["ARIMA"] = {"rmse": [arima_m["rmse"]], "mae": [arima_m["mae"]], "mda": [arima_m["mda"]]}
+                print(f"  ARIMA      : RMSE={arima_m['rmse']:.4f} MAE={arima_m['mae']:.4f} MDA={arima_m['mda']:.4f}  ({elapsed:.1f}s)")
             else:
                 print(f"  ARIMA      : SKIP (insufficient test data)")
 
         # DL summary
-        if ds in vanilla_rmse:
-            print(f"  Linear     : mean={np.mean(vanilla_rmse[ds]):.4f} ± {np.std(vanilla_rmse[ds]):.4f}  (5 seeds)")
-        if ds in booster_rmse:
-            print(f"  Linear+TSB : mean={np.mean(booster_rmse[ds]):.4f} ± {np.std(booster_rmse[ds]):.4f}  (5 seeds)")
+        if ds in vanilla_metrics:
+            print(f"  Linear     : RMSE={np.mean(vanilla_metrics[ds]['rmse']):.4f}  (5 seeds)")
+        if ds in booster_metrics:
+            print(f"  Linear+TSB : RMSE={np.mean(booster_metrics[ds]['rmse']):.4f}  (5 seeds)")
 
         # Incremental save
         RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -372,7 +419,7 @@ def analyze(results):
         rmse_means = {}
 
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 line += f" | {val:>12.4f}"
                 rmse_means[m] = val
@@ -404,8 +451,8 @@ def analyze(results):
             continue
         wins, total = 0, 0
         for ds in ALL_DATASETS:
-            tsb_val = _get_rmse_mean(results, ds, "Linear+TSB")
-            other_val = _get_rmse_mean(results, ds, m)
+            tsb_val = _get_metric_mean(results, ds, "Linear+TSB")
+            other_val = _get_metric_mean(results, ds, m)
             if tsb_val is not None and other_val is not None:
                 total += 1
                 if tsb_val < other_val:
@@ -423,7 +470,7 @@ def analyze(results):
         cat_means = {m: [] for m in methods}
         for ds in cat_datasets:
             for m in methods:
-                val = _get_rmse_mean(results, ds, m)
+                val = _get_metric_mean(results, ds, m)
                 if val is not None:
                     cat_means[m].append(val)
 
@@ -444,7 +491,7 @@ def analyze(results):
             continue
         available = {}
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 available[m] = val
         if not available:
@@ -480,14 +527,14 @@ def analyze(results):
 
         available_rmse = {}
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 available_rmse[m] = val
         best_rmse = min(available_rmse.values()) if available_rmse else None
 
         cells = []
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 if best_rmse is not None and abs(val - best_rmse) < 1e-8:
                     cells.append(r"\textbf{" + f"{val:.4f}" + "}")
@@ -503,7 +550,7 @@ def analyze(results):
     avg_cells = []
     avg_rmse = {}
     for m in methods:
-        vals = [_get_rmse_mean(results, ds, m) for ds in ALL_DATASETS]
+        vals = [_get_metric_mean(results, ds, m) for ds in ALL_DATASETS]
         vals = [v for v in vals if v is not None]
         if vals:
             avg = np.mean(vals)
@@ -550,12 +597,12 @@ def plot_tsb_vs_best_baseline(results):
 
     datasets, diffs, colors, best_names = [], [], [], []
     for ds in ALL_DATASETS:
-        tsb = _get_rmse_mean(results, ds, "Linear+TSB")
+        tsb = _get_metric_mean(results, ds, "Linear+TSB")
         if tsb is None:
             continue
         ext_rmse = {}
         for m in methods_ext:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 ext_rmse[m] = val
         if not ext_rmse:
@@ -622,7 +669,7 @@ def plot_average_rank(results):
             continue
         available = {}
         for m in methods:
-            val = _get_rmse_mean(results, ds, m)
+            val = _get_metric_mean(results, ds, m)
             if val is not None:
                 available[m] = val
         if not available:
@@ -663,11 +710,61 @@ def plot_average_rank(results):
     print("  Saved: average_rank.png")
 
 
+def plot_metric_comparison(results, metric, higher_is_better=False):
+    """Grouped bar chart: all methods × 16 datasets for a given metric."""
+    methods = ["ARIMA", "XGBoost", "LightGBM", "Linear", "Linear+TSB"]
+    method_colors = ["#9E9E9E", "#FF7043", "#66BB6A", "#42A5F5", "#AB47BC"]
+
+    datasets_with_data = []
+    for ds in ALL_DATASETS:
+        has_any = any(_get_metric_mean(results, ds, m, metric) is not None for m in methods)
+        if has_any:
+            datasets_with_data.append(ds)
+
+    if not datasets_with_data:
+        print(f"  SKIP {metric} chart (no data)")
+        return
+
+    n_ds = len(datasets_with_data)
+    n_methods = len(methods)
+    bar_width = 0.15
+    x = np.arange(n_ds)
+
+    fig, ax = plt.subplots(figsize=(max(14, n_ds * 0.9), 6))
+
+    for j, (m, color) in enumerate(zip(methods, method_colors)):
+        vals = []
+        for ds in datasets_with_data:
+            v = _get_metric_mean(results, ds, m, metric)
+            vals.append(v if v is not None else 0)
+        offset = (j - n_methods / 2 + 0.5) * bar_width
+        ax.bar(x + offset, vals, bar_width, label=m, color=color, edgecolor='white', linewidth=0.5)
+
+    metric_upper = metric.upper()
+    better = "higher" if higher_is_better else "lower"
+    ax.set_xlabel('Dataset', fontsize=11)
+    ax.set_ylabel(f'{metric_upper} ({better} is better)', fontsize=11)
+    ax.set_title(f'{metric_upper} Comparison: All Methods × 16 Datasets', fontsize=13, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(datasets_with_data, fontsize=8, rotation=45, ha='right')
+    ax.legend(fontsize=9, loc='upper right')
+    ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(FIGURES_DIR / f'benchmark_{metric}.png', dpi=200, bbox_inches='tight', facecolor='white')
+    plt.close()
+    print(f"  Saved: benchmark_{metric}.png")
+
+
 def generate_figures(results):
     """Generate all benchmark figures."""
     print("\nGenerating figures...")
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     plot_tsb_vs_best_baseline(results)
     plot_average_rank(results)
+    plot_metric_comparison(results, "rmse", higher_is_better=False)
+    plot_metric_comparison(results, "mae", higher_is_better=False)
+    plot_metric_comparison(results, "mda", higher_is_better=True)
     print(f"Figures saved to {FIGURES_DIR}/")
 
 
