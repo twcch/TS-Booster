@@ -510,8 +510,7 @@ def plot_improvement_bars(results):
 
     ax.set_xlabel('Dataset', fontsize=11)
     ax.set_ylabel('RMSE Improvement (%)', fontsize=11)
-    ax.set_title('TS-Booster vs Vanilla Linear: RMSE Improvement (5 seeds, error bars = 1 std)\n'
-                 '** p < 0.01 (paired t-test)',
+    ax.set_title('TS-Booster vs Vanilla Linear: RMSE Improvement (5 seeds, error bars = 1 std)',
                  fontsize=12, fontweight='bold')
     ax.set_xticks(x)
     ax.set_xticklabels(datasets, rotation=45, ha='right', fontsize=9)
