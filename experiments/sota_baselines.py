@@ -723,7 +723,7 @@ def plot_metric_comparison(results, metric, higher_is_better=False):
     for m, bars in bar_containers:
         for i, bar in enumerate(bars):
             if best_per_ds.get(i) != m:
-                bar.set_alpha(0.35)
+                bar.set_alpha(0.25)
 
     metric_upper = metric.upper()
     better = "higher" if higher_is_better else "lower"

@@ -457,11 +457,6 @@ def _plot_bars(matrix, datasets, backbones, metric, output_dir):
                edgecolor='#37474F', linewidth=0.8)
         bar_containers.append((j, bars))
 
-    # Dim non-best bars
-    for j, bars in bar_containers:
-        for i, bar in enumerate(bars):
-            if best_per_ds.get(i) != j:
-                bar.set_alpha(0.35)
 
     metric_upper = metric.upper()
     ax.axhline(y=0, color='#9E9E9E', linewidth=1, linestyle='--')
