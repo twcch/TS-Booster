@@ -112,7 +112,7 @@ def exp1_overall(cb):
     Fig 1b: Win count breakdown (out of 16) per backbone per metric.
     """
     metrics = ['rmse_imp', 'mae_imp', 'mda_imp']
-    metric_labels = ['RMSE ↓', 'MAE ↓', 'MDA ↑']
+    metric_labels = ['RMSE', 'MAE', 'MDA']
     is_mda = [False, False, True]
 
     # --- Fig 1a: Compact heatmap ---
@@ -221,7 +221,7 @@ def _exp_vs_baselines(results, tsb_method, competitors, comp_colors,
     Shows avg improvement of TSB over each competitor + win counts.
     """
     metrics = ['rmse', 'mae', 'mda']
-    metric_labels = ['RMSE ↓', 'MAE ↓', 'MDA ↑']
+    metric_labels = ['RMSE', 'MAE', 'MDA']
     is_mda = [False, False, True]
 
     # 3 subplots (one per metric), each showing bars per competitor
@@ -284,8 +284,8 @@ def exp2_vs_ml(bench):
         bench, 'Linear+TSB',
         competitors=['ARIMA', 'XGBoost', 'LightGBM'],
         comp_colors=['#9E9E9E', '#FF7043', '#66BB6A'],
-        title='Exp 2: Linear+TSB vs Traditional ML Baselines\n'
-              '(positive = TSB is better, 5-seed mean)',
+        title='Linear+TSB vs Traditional ML Baselines\n'
+              '(5-seed mean)',
         filename='exp2_vs_ml.png',
     )
 
@@ -296,8 +296,8 @@ def exp3_vs_dl(sota):
         sota, 'Linear+TSB',
         competitors=['DLinear', 'PatchTST', 'iTransformer'],
         comp_colors=['#FF9800', '#00ACC1', '#E91E63'],
-        title='Exp 3: Linear+TSB vs SOTA DL Models\n'
-              '(positive = TSB is better, 5-seed mean)',
+        title='Linear+TSB vs SOTA DL Models\n'
+              '(5-seed mean)',
         filename='exp3_vs_dl.png',
     )
 
