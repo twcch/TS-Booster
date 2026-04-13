@@ -50,3 +50,5 @@ Thumbs.db
 experiments/comprehensive_results/*.json
 experiments/comprehensive_results/*.md
 !experiments/comprehensive_results/figures/
+
+conference/
