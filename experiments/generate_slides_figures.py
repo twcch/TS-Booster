@@ -302,60 +302,61 @@ def exp3_vs_dl(sota):
     )
 
 
-def _exp_per_dataset_hbar(results, tsb_method, competitors, comp_colors,
-                           title, filename):
-    """Horizontal grouped bar: Y=datasets, X=RMSE. FX/Stocks as two subplots."""
+def _exp_per_dataset_lollipop(results, tsb_method, competitors, title, filename):
+    """Lollipop chart: Y=datasets, X=RMSE improvement (%) over best baseline per dataset."""
     datasets = [ds for ds in ALL_DATASETS
                 if ds in results and tsb_method in results[ds]]
-    fx_ds = [ds for ds in datasets if ds in FX_DATASETS]
+    fx_ds  = [ds for ds in datasets if ds in FX_DATASETS]
     stk_ds = [ds for ds in datasets if ds in STOCK_DATASETS]
     groups = [('FX', fx_ds), ('Stocks', stk_ds)]
 
-    all_methods = [tsb_method] + competitors
-    all_colors = [COLOR_TSB] + comp_colors
-    n = len(all_methods)
+    # Compute improvement vs best baseline per dataset
+    all_imps, all_best_comp = {}, {}
+    for ds in datasets:
+        tsb_val = _metric_mean(results, ds, tsb_method, 'rmse')
+        best_val, best_name = None, None
+        for comp in competitors:
+            comp_val = _metric_mean(results, ds, comp, 'rmse')
+            if comp_val is not None and (best_val is None or comp_val < best_val):
+                best_val, best_name = comp_val, comp
+        all_imps[ds] = (best_val - tsb_val) / best_val * 100 if (tsb_val and best_val) else 0
+        all_best_comp[ds] = best_name
 
-    fig, axes = plt.subplots(1, 2, figsize=(15, 8))
+    global_max = max(all_imps.values())
+    global_min = min(all_imps.values())
+    x_min = global_min - 22   # extra room for negative labels on the left
+    x_max = global_max + 16   # extra room for positive labels on the right
+
+    fig, axes = plt.subplots(1, 2, figsize=(18, 9))
+    fig.suptitle(title, fontsize=15, fontweight='bold', y=1.02)
 
     for ax, (group_name, g_ds) in zip(axes, groups):
         short = [ds.replace('_TWD', '').replace('_TW', '') for ds in g_ds]
-        y = np.arange(len(g_ds))
-        bar_h = 0.8 / n
+        imps = [all_imps[ds] for ds in g_ds]
 
-        # Compute per-dataset winners (lowest RMSE)
-        all_vals = {}
-        for j, method in enumerate(all_methods):
-            all_vals[method] = [_metric_mean(results, ds, method, 'rmse') for ds in g_ds]
-        winners = []  # index of winning method per dataset
-        for i in range(len(g_ds)):
-            best_j = min(range(n), key=lambda j: all_vals[all_methods[j]][i] or 999)
-            winners.append(best_j)
+        for i, (ds, imp) in enumerate(zip(g_ds, imps)):
+            color = COLOR_TSB if imp >= 0 else '#C62828'
+            ax.plot([0, imp], [i, i], color=color, linewidth=2.2, alpha=0.85, zorder=3)
+            ax.scatter([imp], [i], color=color, s=100, zorder=5,
+                       edgecolors='white', linewidths=1.0)
+            best_name = all_best_comp[ds]
+            if imp >= 0:
+                ax.text(imp + 1.0, i, f'+{imp:.1f}% vs {best_name}',
+                        va='center', ha='left', fontsize=10, color=color, fontweight='bold')
+            else:
+                ax.text(imp - 1.0, i, f'{best_name} wins ({imp:.1f}%)',
+                        va='center', ha='right', fontsize=10, color='#C62828', fontweight='bold')
 
-        for j, (method, color) in enumerate(zip(all_methods, all_colors)):
-            vals = all_vals[method]
-            offset = (j - (n - 1) / 2) * bar_h
-            # Per-bar alpha: bold if this method wins, faded otherwise
-            for i, v in enumerate(vals):
-                is_winner = (winners[i] == j)
-                ax.barh(y[i] + offset, v, height=bar_h * 0.9,
-                        color=color, alpha=1.0 if is_winner else 0.12,
-                        edgecolor='#333333' if is_winner else 'white',
-                        linewidth=1.2 if is_winner else 0.5,
-                        zorder=5 if is_winner else 3)
-        ax.set_yticks(y)
+        ax.axvline(x=0, color='#424242', linewidth=1.2, linestyle='--', alpha=0.5)
+        ax.axvspan(0, x_max, alpha=0.05, color='#2E7D32', zorder=0)
+        ax.set_xlim(x_min, x_max)
+        ax.set_yticks(range(len(g_ds)))
         ax.set_yticklabels(short, fontsize=12, fontweight='bold')
         ax.invert_yaxis()
-        ax.set_xlabel('RMSE (shorter = better)', fontsize=11)
+        ax.set_xlabel('RMSE Improvement over Best Baseline (%)', fontsize=11)
         ax.set_title(group_name, fontsize=14, fontweight='bold')
         ax.grid(axis='x', alpha=0.2)
 
-    legend_handles = [
-        mpatches.Patch(facecolor=color, edgecolor='#333333', linewidth=1.2, label=method)
-        for method, color in zip(all_methods, all_colors)
-    ]
-    fig.legend(handles=legend_handles, loc='upper center', ncol=n,
-               fontsize=11, bbox_to_anchor=(0.5, 0.98), frameon=True, edgecolor='#CCC')
-    fig.suptitle(title, fontsize=15, fontweight='bold', y=1.04)
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / filename, dpi=DPI, bbox_inches='tight', facecolor='white')
     plt.close()
@@ -363,21 +364,19 @@ def _exp_per_dataset_hbar(results, tsb_method, competitors, comp_colors,
 
 
 def exp2_vs_ml_detail(bench):
-    _exp_per_dataset_hbar(
+    _exp_per_dataset_lollipop(
         bench, 'Linear+TSB',
         competitors=['ARIMA', 'XGBoost', 'LightGBM'],
-        comp_colors=['#1565C0', '#FF7043', '#66BB6A'],
-        title='RMSE by Dataset: Linear+TSB vs ML Baselines (5-seed mean)',
+        title='RMSE Improvement of TSB over ML Baselines — per Dataset (5-seed mean)',
         filename='exp2_vs_ml_detail.png',
     )
 
 
 def exp3_vs_dl_detail(sota):
-    _exp_per_dataset_hbar(
+    _exp_per_dataset_lollipop(
         sota, 'Linear+TSB',
         competitors=['DLinear', 'PatchTST', 'iTransformer'],
-        comp_colors=['#FF9800', '#00ACC1', '#E91E63'],
-        title='RMSE by Dataset: Linear+TSB vs DL Baselines (5-seed mean)',
+        title='RMSE Improvement of TSB over DL Baselines — per Dataset (5-seed mean)',
         filename='exp3_vs_dl_detail.png',
     )
 
@@ -393,111 +392,131 @@ def exp4_backtest():
         print("  Exp4: SKIP (no backtest data)")
         return
 
-    # --- Fig 4a: Sharpe ratio comparison (TSB vs Linear) ---
-    datasets = [ds for ds in ALL_DATASETS if ds in bt]
-    ds_labels, tsb_sharpe, lin_sharpe = [], [], []
+    COMPETITORS = ['Historical Vol', 'XGBoost', 'LightGBM', 'Linear']
+
+    # --- Fig 4a: Sharpe lollipop — TSB vs best competitor per dataset ---
+    datasets = [ds for ds in ALL_DATASETS if ds in bt and 'Linear+TSB' in bt[ds]]
+
+    sharpe_imps, best_comps = {}, {}
     for ds in datasets:
-        t = bt[ds].get('Linear+TSB', {}).get('sharpe')
-        l = bt[ds].get('Linear', {}).get('sharpe')
-        if t is not None and l is not None:
-            ds_labels.append(ds)
-            tsb_sharpe.append(t)
-            lin_sharpe.append(l)
+        tsb_val = bt[ds]['Linear+TSB'].get('sharpe')
+        best_val, best_name = None, None
+        for comp in COMPETITORS:
+            v = bt[ds].get(comp, {}).get('sharpe')
+            if v is not None and (best_val is None or v > best_val):
+                best_val, best_name = v, comp
+        if tsb_val is not None and best_val is not None:
+            sharpe_imps[ds] = tsb_val - best_val
+            best_comps[ds] = best_name
 
-    if ds_labels:
-        diffs = [t - l for t, l in zip(tsb_sharpe, lin_sharpe)]
+    if sharpe_imps:
+        fx_ds  = [ds for ds in datasets if ds in FX_DATASETS  and ds in sharpe_imps]
+        stk_ds = [ds for ds in datasets if ds in STOCK_DATASETS and ds in sharpe_imps]
 
-        # Split into FX / Stocks
-        fx_data  = [(ds, d, ts, ls) for ds, d, ts, ls in zip(ds_labels, diffs, tsb_sharpe, lin_sharpe) if ds in FX_DATASETS]
-        stk_data = [(ds, d, ts, ls) for ds, d, ts, ls in zip(ds_labels, diffs, tsb_sharpe, lin_sharpe) if ds in STOCK_DATASETS]
+        all_vals = list(sharpe_imps.values())
+        x_min = min(all_vals) - 0.08
+        x_max = max(all_vals) + 0.12
 
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6.5))
+        fig, axes = plt.subplots(1, 2, figsize=(18, 9))
         fig.suptitle('Better Volatility Prediction → Better Sharpe Ratio',
                      fontsize=15, fontweight='bold', y=1.02)
 
-        for ax, group_data, group_name in zip(axes, [fx_data, stk_data], ['FX', 'Stocks']):
-            g_labels = [ds.replace('_TWD', '').replace('_TW', '') for ds, *_ in group_data]
-            g_diffs  = [d for _, d, *_ in group_data]
-            colors   = ['#2E7D32' if d > 0 else '#C62828' for d in g_diffs]
-
-            y = np.arange(len(g_labels))
-            bars = ax.barh(y, g_diffs, color=colors, edgecolor='white',
-                           linewidth=0.5, height=0.6)
-
-            for i, (bar, diff) in enumerate(zip(bars, g_diffs)):
-                w = bar.get_width()
-                if w >= 0:
-                    ax.text(w + 0.004, i, f'{diff:+.3f}',
-                            ha='left', va='center', fontsize=10, fontweight='bold')
+        for ax, g_ds, group_name in zip(axes, [fx_ds, stk_ds], ['FX', 'Stocks']):
+            short = [ds.replace('_TWD', '').replace('_TW', '') for ds in g_ds]
+            for i, ds in enumerate(g_ds):
+                imp = sharpe_imps[ds]
+                best_name = best_comps[ds]
+                color = COLOR_TSB if imp >= 0 else '#C62828'
+                ax.plot([0, imp], [i, i], color=color, linewidth=2.2, alpha=0.85, zorder=3)
+                ax.scatter([imp], [i], color=color, s=100, zorder=5,
+                           edgecolors='white', linewidths=1.0)
+                if imp >= 0:
+                    ax.text(imp + 0.006, i, f'+{imp:.3f} vs {best_name}',
+                            va='center', ha='left', fontsize=10, color=color, fontweight='bold')
                 else:
-                    ax.text(0.005, i, f'{diff:+.3f}',
-                            ha='left', va='center', fontsize=10,
-                            fontweight='bold', color='#C62828')
+                    ax.text(imp - 0.006, i, f'{best_name} wins ({imp:.3f})',
+                            va='center', ha='right', fontsize=10, color='#C62828', fontweight='bold')
 
-            ax.axvline(x=0, color='#424242', linewidth=1)
-            ax.set_yticks(y)
-            ax.set_yticklabels(g_labels, fontsize=11)
+            ax.axvline(x=0, color='#424242', linewidth=1.2, linestyle='--', alpha=0.5)
+            ax.axvspan(0, x_max, alpha=0.05, color='#2E7D32', zorder=0)
+            ax.set_xlim(x_min, x_max)
+            ax.set_yticks(range(len(g_ds)))
+            ax.set_yticklabels(short, fontsize=12, fontweight='bold')
             ax.invert_yaxis()
-            ax.set_xlabel('Sharpe Difference (TSB − Linear)', fontsize=11)
-            ax.set_title(group_name, fontsize=13, fontweight='bold')
-            ax.grid(axis='x', alpha=0.3)
+            ax.set_xlabel('Sharpe Difference (TSB − Best Baseline)', fontsize=11)
+            ax.set_title(group_name, fontsize=14, fontweight='bold')
+            ax.grid(axis='x', alpha=0.2)
 
         plt.tight_layout()
         plt.savefig(OUTPUT_DIR / 'exp4a_sharpe.png', dpi=DPI,
                     bbox_inches='tight', facecolor='white')
         plt.close()
-        print("  Exp4a: Sharpe comparison saved")
+        print("  Exp4a: Sharpe lollipop saved")
 
-    # --- Fig 4b: Cumulative Return Improvement (TSB NAV / Linear NAV - 1) ---
-    nav_ds, nav_diff_pct = [], []
+    # --- Fig 4b: Cumulative Return lollipop — TSB vs best competitor per dataset ---
+    nav_imps, nav_best_comps = {}, {}
     for ds in ALL_DATASETS:
         if ds not in dr:
             continue
         tsb_ret = dr[ds].get('Linear+TSB')
-        lin_ret = dr[ds].get('Linear')
-        if tsb_ret and lin_ret:
-            tsb_nav = float(np.cumprod(1 + np.array(tsb_ret))[-1])
-            lin_nav = float(np.cumprod(1 + np.array(lin_ret))[-1])
-            nav_ds.append(ds)
-            nav_diff_pct.append((tsb_nav - lin_nav) / lin_nav * 100)
+        if not tsb_ret:
+            continue
+        tsb_nav = float(np.cumprod(1 + np.array(tsb_ret))[-1])
+        best_nav, best_name = None, None
+        for comp in COMPETITORS:
+            comp_ret = dr[ds].get(comp)
+            if comp_ret:
+                comp_nav = float(np.cumprod(1 + np.array(comp_ret))[-1])
+                if best_nav is None or comp_nav > best_nav:
+                    best_nav, best_name = comp_nav, comp
+        if best_nav is not None:
+            nav_imps[ds] = (tsb_nav - best_nav) / best_nav * 100
+            nav_best_comps[ds] = best_name
 
-    if nav_ds:
-        fx_nav  = [(ds, d) for ds, d in zip(nav_ds, nav_diff_pct) if ds in FX_DATASETS]
-        stk_nav = [(ds, d) for ds, d in zip(nav_ds, nav_diff_pct) if ds in STOCK_DATASETS]
+    if nav_imps:
+        fx_ds  = [ds for ds in ALL_DATASETS if ds in FX_DATASETS   and ds in nav_imps]
+        stk_ds = [ds for ds in ALL_DATASETS if ds in STOCK_DATASETS and ds in nav_imps]
 
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
-        fig.suptitle('TSB Strategy Cumulative Return Improvement over Linear\n'
+        all_vals = list(nav_imps.values())
+        x_min = min(all_vals) - 10
+        x_max = max(all_vals) + 18
+
+        fig, axes = plt.subplots(1, 2, figsize=(18, 9))
+        fig.suptitle('TSB Strategy Cumulative Return Improvement over Best Baseline\n'
                      '(inverse-volatility position sizing)',
                      fontsize=15, fontweight='bold', y=1.02)
 
-        for ax, group_data, group_name in zip(axes, [fx_nav, stk_nav], ['FX', 'Stocks']):
-            g_ds   = [ds.replace('_TWD', '').replace('_TW', '') for ds, _ in group_data]
-            g_vals = [d for _, d in group_data]
-            colors = ['#2E7D32' if d > 0 else '#C62828' for d in g_vals]
+        for ax, g_ds, group_name in zip(axes, [fx_ds, stk_ds], ['FX', 'Stocks']):
+            short = [ds.replace('_TWD', '').replace('_TW', '') for ds in g_ds]
+            for i, ds in enumerate(g_ds):
+                imp = nav_imps[ds]
+                best_name = nav_best_comps[ds]
+                color = COLOR_TSB if imp >= 0 else '#C62828'
+                ax.plot([0, imp], [i, i], color=color, linewidth=2.2, alpha=0.85, zorder=3)
+                ax.scatter([imp], [i], color=color, s=100, zorder=5,
+                           edgecolors='white', linewidths=1.0)
+                if imp >= 0:
+                    ax.text(imp + 0.8, i, f'+{imp:.1f}% vs {best_name}',
+                            va='center', ha='left', fontsize=10, color=color, fontweight='bold')
+                else:
+                    ax.text(imp - 0.8, i, f'{best_name} wins ({imp:.1f}%)',
+                            va='center', ha='right', fontsize=10, color='#C62828', fontweight='bold')
 
-            x = np.arange(len(g_ds))
-            bars = ax.bar(x, g_vals, color=colors, edgecolor='#37474F',
-                          linewidth=0.5, width=0.65)
-
-            for bar, val in zip(bars, g_vals):
-                va = 'bottom' if val >= 0 else 'top'
-                offset = 0.5 if val >= 0 else -0.5
-                ax.text(bar.get_x() + bar.get_width() / 2, val + offset,
-                        f'{val:+.1f}%', ha='center', va=va,
-                        fontsize=9, fontweight='bold')
-
-            ax.axhline(y=0, color='#424242', linewidth=1)
-            ax.set_xticks(x)
-            ax.set_xticklabels(g_ds, fontsize=10, rotation=45, ha='right')
-            ax.set_ylabel('Cumulative Return Improvement (%)', fontsize=11)
-            ax.set_title(group_name, fontsize=13, fontweight='bold')
-            ax.grid(axis='y', alpha=0.3)
+            ax.axvline(x=0, color='#424242', linewidth=1.2, linestyle='--', alpha=0.5)
+            ax.axvspan(0, x_max, alpha=0.05, color='#2E7D32', zorder=0)
+            ax.set_xlim(x_min, x_max)
+            ax.set_yticks(range(len(g_ds)))
+            ax.set_yticklabels(short, fontsize=12, fontweight='bold')
+            ax.invert_yaxis()
+            ax.set_xlabel('Cumulative Return Improvement over Best Baseline (%)', fontsize=11)
+            ax.set_title(group_name, fontsize=14, fontweight='bold')
+            ax.grid(axis='x', alpha=0.2)
 
         plt.tight_layout()
         plt.savefig(OUTPUT_DIR / 'exp4b_cumulative_return.png', dpi=DPI,
                     bbox_inches='tight', facecolor='white')
         plt.close()
-        print("  Exp4b: Cumulative return improvement saved")
+        print("  Exp4b: Cumulative return lollipop saved")
 
 
 # ====================================================================
