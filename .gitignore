@@ -45,6 +45,9 @@ optimization*.log
 # OS
 .DS_Store
 Thumbs.db
+*.pdf
+*:Zone.Identifier
+*.png
 
 # Experiment results (keep structure, ignore large files)
 experiments/comprehensive_results/*.json
