@@ -1,0 +1,146 @@
+{
+  "USD_TWD": {
+    "vanilla_mean": 1.8102160738131097,
+    "vanilla_std": 0.003940960331244381,
+    "tsb_mean": 1.528235288072318,
+    "tsb_std": 0.006568619427912646,
+    "improvement_pct": 15.577189365400804,
+    "p_raw": 4.220417634266345e-08,
+    "holm_rejected": true
+  },
+  "JPY_TWD": {
+    "vanilla_mean": 2.416860824074424,
+    "vanilla_std": 0.004055763018846265,
+    "tsb_mean": 2.0503829569324092,
+    "tsb_std": 0.00954608715525926,
+    "improvement_pct": 15.163383157669555,
+    "p_raw": 3.9768242109123744e-08,
+    "holm_rejected": true
+  },
+  "KRW_TWD": {
+    "vanilla_mean": 1.8220038596175496,
+    "vanilla_std": 0.004355746841865172,
+    "tsb_mean": 1.6839429005830762,
+    "tsb_std": 0.02473748908564191,
+    "improvement_pct": 7.577424071069386,
+    "p_raw": 0.0001722422330750686,
+    "holm_rejected": true
+  },
+  "CAD_TWD": {
+    "vanilla_mean": 1.9762981497455876,
+    "vanilla_std": 0.0028579652145011127,
+    "tsb_mean": 1.7735535904149757,
+    "tsb_std": 0.012097245634734466,
+    "improvement_pct": 10.258804288042851,
+    "p_raw": 3.5449161139505197e-06,
+    "holm_rejected": true
+  },
+  "CNY_TWD": {
+    "vanilla_mean": 1.8652783788109253,
+    "vanilla_std": 0.003919666304496685,
+    "tsb_mean": 1.5985936634658071,
+    "tsb_std": 0.01122338885519003,
+    "improvement_pct": 14.297314458505864,
+    "p_raw": 1.6632694846234136e-06,
+    "holm_rejected": true
+  },
+  "EUR_TWD": {
+    "vanilla_mean": 2.0275798965992493,
+    "vanilla_std": 0.005790517780574243,
+    "tsb_mean": 1.8049164555298396,
+    "tsb_std": 0.013139521847801558,
+    "improvement_pct": 10.981734502441611,
+    "p_raw": 4.297005497933568e-06,
+    "holm_rejected": true
+  },
+  "THB_TWD": {
+    "vanilla_mean": 1.936414425886203,
+    "vanilla_std": 0.02245531532204704,
+    "tsb_mean": 1.694954149066448,
+    "tsb_std": 0.019476986340195512,
+    "improvement_pct": 12.469452488676357,
+    "p_raw": 4.3469181810801e-05,
+    "holm_rejected": true
+  },
+  "EUR_USD": {
+    "vanilla_mean": 1.5952199507620293,
+    "vanilla_std": 0.0031423395161545736,
+    "tsb_mean": 1.399914133410155,
+    "tsb_std": 0.0038126134988128017,
+    "improvement_pct": 12.243190492858213,
+    "p_raw": 1.2747183429218023e-07,
+    "holm_rejected": true
+  },
+  "GBP_USD": {
+    "vanilla_mean": 1.9204268662717587,
+    "vanilla_std": 0.005953020974308132,
+    "tsb_mean": 1.6569697638292034,
+    "tsb_std": 0.03423129599058746,
+    "improvement_pct": 13.718674065106192,
+    "p_raw": 4.729685923073333e-05,
+    "holm_rejected": true
+  },
+  "USD_JPY": {
+    "vanilla_mean": 2.2813136891198758,
+    "vanilla_std": 0.0039934678898355105,
+    "tsb_mean": 1.9459419140917924,
+    "tsb_std": 0.007569816400114041,
+    "improvement_pct": 14.700818069323418,
+    "p_raw": 6.565686730793382e-08,
+    "holm_rejected": true
+  },
+  "0050_TW": {
+    "vanilla_mean": 10.319467310672403,
+    "vanilla_std": 0.2091419014969347,
+    "tsb_mean": 7.507121111548076,
+    "tsb_std": 0.36066973488819937,
+    "improvement_pct": 27.252823372150182,
+    "p_raw": 3.4156797686689986e-05,
+    "holm_rejected": true
+  },
+  "2317_TW": {
+    "vanilla_mean": 7.833787461831932,
+    "vanilla_std": 0.010292897282181322,
+    "tsb_mean": 6.665996128369786,
+    "tsb_std": 0.04317605243390887,
+    "improvement_pct": 14.907110247142933,
+    "p_raw": 2.7998174364714494e-07,
+    "holm_rejected": true
+  },
+  "2330_TW": {
+    "vanilla_mean": 7.162727357361968,
+    "vanilla_std": 0.02056836325847564,
+    "tsb_mean": 5.862880202356072,
+    "tsb_std": 0.01613524363339093,
+    "improvement_pct": 18.147377251067525,
+    "p_raw": 1.785866750890288e-08,
+    "holm_rejected": true
+  },
+  "2454_TW": {
+    "vanilla_mean": 8.806919875079547,
+    "vanilla_std": 0.03609847610526542,
+    "tsb_mean": 7.586358164563189,
+    "tsb_std": 0.04626274840964961,
+    "improvement_pct": 13.859121325380903,
+    "p_raw": 2.7158996514229166e-06,
+    "holm_rejected": true
+  },
+  "2603_TW": {
+    "vanilla_mean": 12.887889141650366,
+    "vanilla_std": 0.017822140082561444,
+    "tsb_mean": 10.21808093973398,
+    "tsb_std": 0.07876867733004575,
+    "improvement_pct": 20.7156359941695,
+    "p_raw": 2.0371761726845135e-07,
+    "holm_rejected": true
+  },
+  "2881_TW": {
+    "vanilla_mean": 6.456448661369632,
+    "vanilla_std": 0.015890832253394733,
+    "tsb_mean": 5.2176431630159845,
+    "tsb_std": 0.0351230669342495,
+    "improvement_pct": 19.187103674589657,
+    "p_raw": 2.2437359229542352e-07,
+    "holm_rejected": true
+  }
+}
