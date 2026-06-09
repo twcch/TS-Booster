@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11, <3.12"
 dependencies = [
+    "arch>=8.0.0",
     "investpy>=1.0.8",
     "ipykernel>=7.1.0",
     "jupyter>=1.1.1",
@@ -20,6 +21,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "torch==2.7.1",
     "torchaudio==2.7.1",
+    "torchinfo>=1.8.0",
     "torchvision==0.22.1",
     "tqdm>=4.67.1",
     "xgboost>=3.1.2",

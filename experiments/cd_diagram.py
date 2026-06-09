@@ -4,14 +4,17 @@ Critical Difference (CD) Diagram for TS-Booster Paper.
 Performs Friedman test + Nemenyi post-hoc comparison across multiple methods
 and generates a CD diagram (Demsar, 2006).
 
-Two comparison groups:
-  1. SOTA DL: DLinear, PatchTST, iTransformer, Linear, Linear+TSB
-  2. Benchmark: ARIMA, XGBoost, LightGBM, SVR, Linear, Linear+TSB
+Three comparison groups (aligned with the paper's restructured experiments
+2/3/4 — ARIMA now sits with the statistical baselines, not the ML group):
+  1. exp2_stat: Persistence, EWMA, HAR-RV, GARCH, GJR-GARCH, ARIMA, TS-Booster + Linear
+  2. exp3_ml:   XGBoost, LightGBM, Linear, TS-Booster + Linear
+  3. exp4_sota: DLinear, PatchTST, iTransformer, Linear, TS-Booster + Linear
 
 Usage:
-  uv run python experiments/cd_diagram.py                    # Generate both diagrams
-  uv run python experiments/cd_diagram.py --group sota       # SOTA only
-  uv run python experiments/cd_diagram.py --group benchmark  # Benchmark only
+  uv run python experiments/cd_diagram.py                       # Generate all diagrams
+  uv run python experiments/cd_diagram.py --group exp2_stat     # Statistical only
+  uv run python experiments/cd_diagram.py --group exp3_ml       # ML only
+  uv run python experiments/cd_diagram.py --group exp4_sota     # SOTA DL only
 """
 import sys
 import json
@@ -30,6 +33,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 SOTA_PATH = Path("experiments/comprehensive_results/sota_baselines/sota_baselines_results.json")
 BENCH_PATH = Path("experiments/comprehensive_results/benchmark/benchmark_baselines_results.json")
+INTEG_PATH = Path("revision/phase3_integration/integration_results.json")
 FIGURES_DIR = Path("experiments/comprehensive_results/cd_diagram")
 
 ALL_DATASETS = [
@@ -38,16 +42,47 @@ ALL_DATASETS = [
     "0050_TW", "2317_TW", "2330_TW", "2454_TW", "2603_TW", "2881_TW",
 ]
 
+
+def load_stat_data():
+    """Merge Phase-3 integration per_dataset (Persistence/EWMA/HAR-RV/GARCH/
+    GJR-GARCH/TSB) with ARIMA pulled out of the ML benchmark results, and
+    rename 'TSB' -> 'TS-Booster + Linear' for a label consistent with the other groups."""
+    integ = json.loads(INTEG_PATH.read_text())["per_dataset"]
+    bench = json.loads(BENCH_PATH.read_text())
+    out = {}
+    for ds, methods in integ.items():
+        out[ds] = dict(methods)
+        out[ds]["TS-Booster + Linear"] = out[ds].pop("TSB")
+        if ds in bench and "ARIMA" in bench[ds]:
+            out[ds]["ARIMA"] = bench[ds]["ARIMA"]
+    return out
+
+
+def rename_tsb(data):
+    """Rename 'Linear+TSB' key to 'TS-Booster + Linear' in loaded data."""
+    out = {}
+    for ds, methods in data.items():
+        out[ds] = {}
+        for k, v in methods.items():
+            out[ds]["TS-Booster + Linear" if k == "Linear+TSB" else k] = v
+    return out
+
+
 GROUPS = {
-    "sota": {
-        "path": SOTA_PATH,
-        "methods": ["DLinear", "PatchTST", "iTransformer", "Linear", "Linear+TSB"],
-        "title": "Critical Difference Diagram: SOTA DL Baselines",
+    "exp2_stat": {
+        "loader": load_stat_data,
+        "methods": ["Persistence", "EWMA", "HAR-RV", "GARCH", "GJR-GARCH", "ARIMA", "TS-Booster + Linear"],
+        "title": "Critical Difference Diagram: Statistical Volatility Models",
     },
-    "benchmark": {
-        "path": BENCH_PATH,
-        "methods": ["ARIMA", "XGBoost", "LightGBM", "Linear", "Linear+TSB"],
-        "title": "Critical Difference Diagram: Traditional Baselines",
+    "exp3_ml": {
+        "loader": lambda: rename_tsb(json.loads(BENCH_PATH.read_text())),
+        "methods": ["XGBoost", "LightGBM", "TS-Booster + Linear"],
+        "title": "Critical Difference Diagram: Traditional ML Baselines",
+    },
+    "exp4_sota": {
+        "loader": lambda: rename_tsb(json.loads(SOTA_PATH.read_text())),
+        "methods": ["DLinear", "PatchTST", "iTransformer", "TS-Booster + Linear"],
+        "title": "Critical Difference Diagram: SOTA DL Baselines",
     },
 }
 
@@ -230,7 +265,7 @@ def draw_cd_diagram(avg_ranks, methods, cd, n_datasets, title, filename, alpha=0
     right_margin = 0.15
     top_y = 0.85
     line_y = 0.7
-    label_y_top = 0.88
+    label_y_top = 0.94
     label_y_bot = 0.15
     cd_y = 0.95
 
@@ -271,24 +306,30 @@ def draw_cd_diagram(avg_ranks, methods, cd, n_datasets, title, filename, alpha=0
         x_rank = rank_to_x(rank)
 
         if idx < n_left:
-            # Left side (top performers) - labels above
-            label_x = left_margin * 0.3
+            # Left side (top performers) - labels above.
+            # Right-align text so its right edge sits at a fixed anchor;
+            # the connector then starts just past that edge and never
+            # crosses through the (variable-length) label text.
+            label_x = left_margin * 0.5
             label_y_pos = label_y_top - idx * (0.12)
-            ha = 'left'
+            ha = 'right'
+            line_start_x = label_x + 0.012
 
-            # Draw connecting line
-            ax.plot([label_x + 0.08, x_rank], [label_y_pos, label_y_pos],
+            ax.plot([line_start_x, x_rank], [label_y_pos, label_y_pos],
                     'k-', linewidth=0.8, alpha=0.5, transform=ax.transAxes)
             ax.plot([x_rank, x_rank], [label_y_pos, line_y],
                     'k-', linewidth=0.8, alpha=0.5, transform=ax.transAxes)
         else:
-            # Right side - labels below
+            # Right side - labels below.
+            # Left-align text so its left edge sits at a fixed anchor;
+            # the connector ends just before that edge.
             right_idx = idx - n_left
-            label_x = 1 - right_margin * 0.3
+            label_x = 1 - right_margin * 0.5
             label_y_pos = label_y_bot + right_idx * 0.12
-            ha = 'right'
+            ha = 'left'
+            line_end_x = label_x - 0.012
 
-            ax.plot([label_x - 0.08, x_rank], [label_y_pos, label_y_pos],
+            ax.plot([x_rank, line_end_x], [label_y_pos, label_y_pos],
                     'k-', linewidth=0.8, alpha=0.5, transform=ax.transAxes)
             ax.plot([x_rank, x_rank], [label_y_pos, line_y],
                     'k-', linewidth=0.8, alpha=0.5, transform=ax.transAxes)
@@ -406,22 +447,16 @@ def run_group(group_name, results_data, group_config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Critical Difference diagram for TS-Booster")
-    parser.add_argument("--group", type=str, choices=["sota", "benchmark", "all"],
+    parser.add_argument("--group", type=str, choices=list(GROUPS.keys()) + ["all"],
                         default="all", help="Which comparison group to analyze")
     args = parser.parse_args()
 
-    groups_to_run = ["sota", "benchmark"] if args.group == "all" else [args.group]
+    groups_to_run = list(GROUPS.keys()) if args.group == "all" else [args.group]
     all_results = {}
 
     for group_name in groups_to_run:
         config = GROUPS[group_name]
-        if not config["path"].exists():
-            print(f"WARNING: {config['path']} not found. Skipping {group_name}.")
-            continue
-
-        with open(config["path"]) as f:
-            data = json.load(f)
-
+        data = config["loader"]()
         result = run_group(group_name, data, config)
         if result is not None:
             all_results[group_name] = result

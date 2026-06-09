@@ -140,6 +140,7 @@ class PatchTST(nn.Module):
         n_layers=3,
         d_ff=256,
         dropout=0.1,
+        use_revin=False,
     ):
         super().__init__()
         self.seq_len = seq_len
@@ -148,6 +149,7 @@ class PatchTST(nn.Module):
         self.patch_len = patch_len
         self.stride = stride
         self.d_model = d_model
+        self.use_revin = use_revin
 
         # Number of patches
         self.n_patches = (seq_len - patch_len) // stride + 1
@@ -172,15 +174,16 @@ class PatchTST(nn.Module):
         # Flatten head: n_patches * d_model -> pred_len
         self.head = nn.Linear(self.n_patches * d_model, pred_len)
 
-        # RevIN for handling distribution shift
-        self.revin = RevIN(n_features)
+        # RevIN (optional, off by default for fair comparison with Z-score baselines)
+        self.revin = RevIN(n_features) if use_revin else None
 
     def forward(self, x):
         # x: [B, T, C]
         B, T, C = x.shape
 
-        # RevIN normalize
-        x = self.revin.normalize(x)
+        # RevIN normalize (optional)
+        if self.use_revin:
+            x = self.revin.normalize(x)
 
         # Channel-independent: process each channel separately
         channel_preds = []
@@ -201,9 +204,13 @@ class PatchTST(nn.Module):
             pred = self.head(flat)  # [B, pred_len]
             channel_preds.append(pred)
 
-        # Stack channels → [B, pred_len, C], denormalize, take channel 0
+        # Stack channels → [B, pred_len, C]
         out = torch.stack(channel_preds, dim=-1)  # [B, pred_len, C]
-        out = self.revin.denormalize(out)
+
+        # RevIN denormalize (optional)
+        if self.use_revin:
+            out = self.revin.denormalize(out)
+
         pred = out[:, :, 0]  # [B, pred_len]
         return pred, pred, None, None, None
 
