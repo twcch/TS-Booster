@@ -93,6 +93,19 @@ def load_ablation():
     return out
 
 
+def load_stat_comparison():
+    """Merge Phase-3 integration per_dataset (Persistence/EWMA/HAR-RV/GARCH/
+    GJR-GARCH/TSB) with ARIMA pulled out of the ML benchmark results."""
+    integ = json.loads(Path('revision/phase3_integration/integration_results.json').read_text())
+    bench = load_json('benchmark/benchmark_baselines_results.json')
+    out = {}
+    for ds, methods in integ['per_dataset'].items():
+        out[ds] = dict(methods)
+        if ds in bench and 'ARIMA' in bench[ds]:
+            out[ds]['ARIMA'] = bench[ds]['ARIMA']
+    return out
+
+
 def _metric_mean(results, ds, method, metric='rmse'):
     if ds not in results or method not in results[ds]:
         return None
@@ -224,8 +237,11 @@ def _exp_vs_baselines(results, tsb_method, competitors, comp_colors,
     metric_labels = ['RMSE', 'MAE', 'MDA']
     is_mda = [False, False, True]
 
-    # 3 subplots (one per metric), each showing bars per competitor
-    fig, axes = plt.subplots(1, 3, figsize=(5 * len(competitors), 5.5))
+    # 3 subplots (one per metric), each showing bars per competitor.
+    # Cap total width so figures with many competitors (e.g. 6 statistical
+    # baselines) stay visually consistent with the 2-3 competitor figures.
+    fig_width = min(5 * len(competitors), 20)
+    fig, axes = plt.subplots(1, 3, figsize=(fig_width, 5.5))
 
     for m_idx, (metric, ml, mda_flag, mc) in enumerate(
             zip(metrics, metric_labels, is_mda, METRIC_COLORS)):
@@ -278,27 +294,39 @@ def _exp_vs_baselines(results, tsb_method, competitors, comp_colors,
     print(f"  Saved: {filename}")
 
 
-def exp2_vs_ml(bench):
-    """Experiment 2: Linear+TSB vs ML baselines."""
+def exp2_vs_stat(stat):
+    """Experiment 2: Linear+TSB vs statistical volatility models."""
     _exp_vs_baselines(
-        bench, 'Linear+TSB',
-        competitors=['ARIMA', 'XGBoost', 'LightGBM'],
-        comp_colors=['#9E9E9E', '#FF7043', '#66BB6A'],
-        title='Linear+TSB vs Traditional ML Baselines\n'
+        stat, 'TSB',
+        competitors=['Persistence', 'EWMA', 'HAR-RV', 'GARCH', 'GJR-GARCH', 'ARIMA'],
+        comp_colors=['#9E9E9E', '#FFA726', '#26A69A', '#5C6BC0', '#8D6E63', '#78909C'],
+        title='TS-Booster + Linear vs Statistical Volatility Models\n'
               '(5-seed mean)',
-        filename='exp2_vs_ml.png',
+        filename='exp2_vs_stat.png',
     )
 
 
-def exp3_vs_dl(sota):
-    """Experiment 3: Linear+TSB vs SOTA DL models."""
+def exp3_vs_ml(bench):
+    """Experiment 3: Linear+TSB vs ML baselines."""
+    _exp_vs_baselines(
+        bench, 'Linear+TSB',
+        competitors=['XGBoost', 'LightGBM'],
+        comp_colors=['#FF7043', '#66BB6A'],
+        title='TS-Booster + Linear vs Traditional ML Baselines\n'
+              '(5-seed mean)',
+        filename='exp3_vs_ml.png',
+    )
+
+
+def exp4_vs_dl(sota):
+    """Experiment 4: Linear+TSB vs SOTA DL models."""
     _exp_vs_baselines(
         sota, 'Linear+TSB',
         competitors=['DLinear', 'PatchTST', 'iTransformer'],
         comp_colors=['#FF9800', '#00ACC1', '#E91E63'],
-        title='Linear+TSB vs SOTA DL Models\n'
-              '(5-seed mean)',
-        filename='exp3_vs_dl.png',
+        title='TS-Booster + Linear vs SOTA DL Models\n'
+              '(5-seed mean, best LR per dataset)',
+        filename='exp4_vs_dl.png',
     )
 
 
@@ -363,78 +391,84 @@ def _exp_per_dataset_lollipop(results, tsb_method, competitors, title, filename)
     print(f"  Saved: {filename}")
 
 
-def exp2_vs_ml_detail(bench):
+def exp2_vs_stat_detail(stat):
     _exp_per_dataset_lollipop(
-        bench, 'Linear+TSB',
-        competitors=['ARIMA', 'XGBoost', 'LightGBM'],
-        title='RMSE Improvement of TSB over ML Baselines — per Dataset (5-seed mean)',
-        filename='exp2_vs_ml_detail.png',
+        stat, 'TSB',
+        competitors=['Persistence', 'EWMA', 'HAR-RV', 'GARCH', 'GJR-GARCH', 'ARIMA'],
+        title='RMSE Improvement of TS-Booster + Linear over Statistical Baselines — per Dataset (5-seed mean)',
+        filename='exp2_vs_stat_detail.png',
     )
 
 
-def exp3_vs_dl_detail(sota):
+def exp3_vs_ml_detail(bench):
+    _exp_per_dataset_lollipop(
+        bench, 'Linear+TSB',
+        competitors=['XGBoost', 'LightGBM'],
+        title='RMSE Improvement of TS-Booster + Linear over ML Baselines — per Dataset (5-seed mean)',
+        filename='exp3_vs_ml_detail.png',
+    )
+
+
+def exp4_vs_dl_detail(sota):
     _exp_per_dataset_lollipop(
         sota, 'Linear+TSB',
         competitors=['DLinear', 'PatchTST', 'iTransformer'],
-        title='RMSE Improvement of TSB over DL Baselines — per Dataset (5-seed mean)',
-        filename='exp3_vs_dl_detail.png',
+        title='RMSE Improvement of TS-Booster + Linear over DL Baselines — per Dataset (5-seed mean, best LR)',
+        filename='exp4_vs_dl_detail.png',
     )
 
 
 # ====================================================================
 # EXPERIMENT 4: Backtest — Sharpe bar + Cumulative Return curves
 # ====================================================================
-def exp4_backtest():
+def exp5_backtest():
     try:
         bt = load_json('backtest/backtest_results.json')
         dr = load_json('backtest/backtest_daily_returns.json')
     except FileNotFoundError:
-        print("  Exp4: SKIP (no backtest data)")
+        print("  Exp5: SKIP (no backtest data)")
         return
 
-    COMPETITORS = ['Historical Vol', 'XGBoost', 'LightGBM', 'Linear']
+    # --- Fig 5a: Sharpe lollipop — paired comparison TSB vs its own vanilla
+    # Linear backbone. This isolates the effect of TSB's more accurate
+    # volatility prediction (controlled comparison; matches tsb_vs_linear.png).
+    datasets = [ds for ds in ALL_DATASETS
+                if ds in bt and 'Linear+TSB' in bt[ds] and 'Linear' in bt[ds]]
 
-    # --- Fig 4a: Sharpe lollipop — TSB vs best competitor per dataset ---
-    datasets = [ds for ds in ALL_DATASETS if ds in bt and 'Linear+TSB' in bt[ds]]
-
-    sharpe_imps, best_comps = {}, {}
+    sharpe_imps = {}
     for ds in datasets:
         tsb_val = bt[ds]['Linear+TSB'].get('sharpe')
-        best_val, best_name = None, None
-        for comp in COMPETITORS:
-            v = bt[ds].get(comp, {}).get('sharpe')
-            if v is not None and (best_val is None or v > best_val):
-                best_val, best_name = v, comp
-        if tsb_val is not None and best_val is not None:
-            sharpe_imps[ds] = tsb_val - best_val
-            best_comps[ds] = best_name
+        lin_val = bt[ds]['Linear'].get('sharpe')
+        if tsb_val is not None and lin_val is not None:
+            sharpe_imps[ds] = tsb_val - lin_val
 
     if sharpe_imps:
         fx_ds  = [ds for ds in datasets if ds in FX_DATASETS  and ds in sharpe_imps]
         stk_ds = [ds for ds in datasets if ds in STOCK_DATASETS and ds in sharpe_imps]
+        n_wins = sum(1 for v in sharpe_imps.values() if v > 0)
 
         all_vals = list(sharpe_imps.values())
-        x_min = min(all_vals) - 0.08
-        x_max = max(all_vals) + 0.12
+        x_min = min(all_vals) - 0.05
+        x_max = max(all_vals) + 0.07
 
         fig, axes = plt.subplots(1, 2, figsize=(18, 9))
-        fig.suptitle('Better Volatility Prediction → Better Sharpe Ratio',
+        fig.suptitle(f'Better Volatility Prediction → Better Sharpe Ratio\n'
+                     f'TS-Booster + Linear vs Vanilla Linear, Paired Comparison ({n_wins}/{len(sharpe_imps)} wins)',
                      fontsize=15, fontweight='bold', y=1.02)
 
         for ax, g_ds, group_name in zip(axes, [fx_ds, stk_ds], ['FX', 'Stocks']):
             short = [ds.replace('_TWD', '').replace('_TW', '') for ds in g_ds]
             for i, ds in enumerate(g_ds):
                 imp = sharpe_imps[ds]
-                best_name = best_comps[ds]
                 color = COLOR_TSB if imp >= 0 else '#C62828'
                 ax.plot([0, imp], [i, i], color=color, linewidth=2.2, alpha=0.85, zorder=3)
                 ax.scatter([imp], [i], color=color, s=100, zorder=5,
                            edgecolors='white', linewidths=1.0)
                 if imp >= 0:
-                    ax.text(imp + 0.006, i, f'+{imp:.3f} vs {best_name}',
+                    ax.text(imp + 0.004, i, f'+{imp:.3f}',
                             va='center', ha='left', fontsize=10, color=color, fontweight='bold')
                 else:
-                    ax.text(imp - 0.006, i, f'{best_name} wins ({imp:.3f})',
+                    ax.text(imp - 0.004, i, f'{imp:.3f}',
                             va='center', ha='right', fontsize=10, color='#C62828', fontweight='bold')
 
             ax.axvline(x=0, color='#424242', linewidth=1.2, linestyle='--', alpha=0.5)
@@ -443,63 +477,56 @@ def exp4_backtest():
             ax.set_yticks(range(len(g_ds)))
             ax.set_yticklabels(short, fontsize=12, fontweight='bold')
             ax.invert_yaxis()
-            ax.set_xlabel('Sharpe Difference (TSB − Best Baseline)', fontsize=11)
+            ax.set_xlabel('Sharpe Difference (TS-Booster + Linear − Vanilla Linear)', fontsize=11)
             ax.set_title(group_name, fontsize=14, fontweight='bold')
             ax.grid(axis='x', alpha=0.2)
 
         plt.tight_layout()
-        plt.savefig(OUTPUT_DIR / 'exp4a_sharpe.png', dpi=DPI,
+        plt.savefig(OUTPUT_DIR / 'exp5a_sharpe.png', dpi=DPI,
                     bbox_inches='tight', facecolor='white')
         plt.close()
-        print("  Exp4a: Sharpe lollipop saved")
+        print("  Exp5a: Sharpe lollipop saved")
 
-    # --- Fig 4b: Cumulative Return lollipop — TSB vs best competitor per dataset ---
-    nav_imps, nav_best_comps = {}, {}
+    # --- Fig 5b: Cumulative Return lollipop — paired comparison TSB vs Linear ---
+    nav_imps = {}
     for ds in ALL_DATASETS:
         if ds not in dr:
             continue
         tsb_ret = dr[ds].get('Linear+TSB')
-        if not tsb_ret:
+        lin_ret = dr[ds].get('Linear')
+        if not tsb_ret or not lin_ret:
             continue
         tsb_nav = float(np.cumprod(1 + np.array(tsb_ret))[-1])
-        best_nav, best_name = None, None
-        for comp in COMPETITORS:
-            comp_ret = dr[ds].get(comp)
-            if comp_ret:
-                comp_nav = float(np.cumprod(1 + np.array(comp_ret))[-1])
-                if best_nav is None or comp_nav > best_nav:
-                    best_nav, best_name = comp_nav, comp
-        if best_nav is not None:
-            nav_imps[ds] = (tsb_nav - best_nav) / best_nav * 100
-            nav_best_comps[ds] = best_name
+        lin_nav = float(np.cumprod(1 + np.array(lin_ret))[-1])
+        nav_imps[ds] = (tsb_nav - lin_nav) / lin_nav * 100
 
     if nav_imps:
         fx_ds  = [ds for ds in ALL_DATASETS if ds in FX_DATASETS   and ds in nav_imps]
         stk_ds = [ds for ds in ALL_DATASETS if ds in STOCK_DATASETS and ds in nav_imps]
+        n_wins = sum(1 for v in nav_imps.values() if v > 0)
 
         all_vals = list(nav_imps.values())
-        x_min = min(all_vals) - 10
-        x_max = max(all_vals) + 18
+        x_min = min(all_vals) - 6
+        x_max = max(all_vals) + 10
 
         fig, axes = plt.subplots(1, 2, figsize=(18, 9))
-        fig.suptitle('TSB Strategy Cumulative Return Improvement over Best Baseline\n'
-                     '(inverse-volatility position sizing)',
+        fig.suptitle(f'TS-Booster + Linear Strategy Cumulative Return vs Vanilla Linear\n'
+                     f'Paired Comparison, Inverse-Volatility Position Sizing ({n_wins}/{len(nav_imps)} wins)',
                      fontsize=15, fontweight='bold', y=1.02)
 
         for ax, g_ds, group_name in zip(axes, [fx_ds, stk_ds], ['FX', 'Stocks']):
             short = [ds.replace('_TWD', '').replace('_TW', '') for ds in g_ds]
             for i, ds in enumerate(g_ds):
                 imp = nav_imps[ds]
-                best_name = nav_best_comps[ds]
                 color = COLOR_TSB if imp >= 0 else '#C62828'
                 ax.plot([0, imp], [i, i], color=color, linewidth=2.2, alpha=0.85, zorder=3)
                 ax.scatter([imp], [i], color=color, s=100, zorder=5,
                            edgecolors='white', linewidths=1.0)
                 if imp >= 0:
-                    ax.text(imp + 0.8, i, f'+{imp:.1f}% vs {best_name}',
+                    ax.text(imp + 0.6, i, f'+{imp:.1f}%',
                             va='center', ha='left', fontsize=10, color=color, fontweight='bold')
                 else:
-                    ax.text(imp - 0.8, i, f'{best_name} wins ({imp:.1f}%)',
+                    ax.text(imp - 0.6, i, f'{imp:.1f}%',
                             va='center', ha='right', fontsize=10, color='#C62828', fontweight='bold')
 
             ax.axvline(x=0, color='#424242', linewidth=1.2, linestyle='--', alpha=0.5)
@@ -508,21 +535,21 @@ def exp4_backtest():
             ax.set_yticks(range(len(g_ds)))
             ax.set_yticklabels(short, fontsize=12, fontweight='bold')
             ax.invert_yaxis()
-            ax.set_xlabel('Cumulative Return Improvement over Best Baseline (%)', fontsize=11)
+            ax.set_xlabel('Cumulative Return Difference vs Vanilla Linear (%)', fontsize=11)
             ax.set_title(group_name, fontsize=14, fontweight='bold')
             ax.grid(axis='x', alpha=0.2)
 
         plt.tight_layout()
-        plt.savefig(OUTPUT_DIR / 'exp4b_cumulative_return.png', dpi=DPI,
+        plt.savefig(OUTPUT_DIR / 'exp5b_cumulative_return.png', dpi=DPI,
                     bbox_inches='tight', facecolor='white')
         plt.close()
-        print("  Exp4b: Cumulative return lollipop saved")
+        print("  Exp5b: Cumulative return lollipop saved")
 
 
 # ====================================================================
 # SUPPORTING: Ablation, Sensitivity, Compute Cost, Interpretability, CD
 # ====================================================================
-def support_ablation(abl):
+def exp6_ablation(abl):
     configs = ['Vanilla', '+Decomp', '+Expert', 'TS-Booster']
     config_colors = ['#90A4AE', '#FFB74D', '#42A5F5', COLOR_TSB]
 
@@ -580,13 +607,13 @@ def support_ablation(abl):
     fig.suptitle('Ablation: Expert Module Is the Key Component',
                  fontsize=15, fontweight='bold', y=1.02)
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / 'support_ablation.png', dpi=DPI,
+    plt.savefig(OUTPUT_DIR / 'exp6_ablation.png', dpi=DPI,
                 bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Support: Ablation saved")
+    print("  Exp6: Ablation saved")
 
 
-def support_sensitivity(sens):
+def exp6_sensitivity(sens):
     param_info = {
         'decomp':       ('Decomp Kernels',      '[7,13]'),
         'boost_rounds': ('Boost Rounds',         '2'),
@@ -649,10 +676,10 @@ def support_sensitivity(sens):
     fig.suptitle('Hyperparameter Sensitivity: All Architecture Params Are Robust',
                  fontsize=15, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / 'support_sensitivity.png', dpi=DPI,
+    plt.savefig(OUTPUT_DIR / 'exp6_sensitivity.png', dpi=DPI,
                 bbox_inches='tight', facecolor='white')
     plt.close()
-    print("  Support: Sensitivity saved")
+    print("  Exp6: Sensitivity saved")
 
 
 def support_compute_cost():
@@ -698,6 +725,53 @@ def support_compute_cost():
                 bbox_inches='tight', facecolor='white')
     plt.close()
     print("  Support: Compute cost saved")
+
+
+def support_revin_check():
+    """Phase-4 RevIN fairness check: PatchTST (w/ vs w/o RevIN) vs TSB+Linear — RMSE per dataset."""
+    path = Path('revision/phase4_revin_fix/patchtst_no_revin_results.json')
+    if not path.exists():
+        print("  Support: RevIN check SKIP")
+        return
+    raw = json.loads(path.read_text())
+
+    datasets = [ds for ds in ALL_DATASETS if ds in raw]
+    fx_ds = [ds for ds in datasets if ds in FX_DATASETS]
+    stk_ds = [ds for ds in datasets if ds in STOCK_DATASETS]
+    groups = [('FX', fx_ds), ('Stocks', stk_ds)]
+
+    fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+    fig.suptitle('RevIN Fairness Check: PatchTST (w/ vs w/o RevIN) vs TS-Booster + Linear — RMSE (5-seed mean)',
+                 fontsize=15, fontweight='bold', y=1.02)
+
+    for ax, (group_name, g_ds) in zip(axes, groups):
+        short = [ds.replace('_TWD', '').replace('_TW', '') for ds in g_ds]
+        x = np.arange(len(g_ds))
+        width = 0.26
+
+        no_revin = [float(np.mean(raw[ds]['patchtst_no_revin']['rmse'])) for ds in g_ds]
+        w_revin = [raw[ds]['patchtst_orig_rmse'] for ds in g_ds]
+        tsb = [raw[ds]['tsb_rmse'] for ds in g_ds]
+
+        ax.bar(x - width, no_revin, width, label='PatchTST (no RevIN)',
+               color='#FFCCBC', edgecolor='#37474F', linewidth=0.7)
+        ax.bar(x, w_revin, width, label='PatchTST (w/ RevIN)',
+               color='#00ACC1', edgecolor='#37474F', linewidth=0.7, alpha=0.9)
+        ax.bar(x + width, tsb, width, label='TS-Booster + Linear',
+               color=COLOR_TSB, edgecolor='#37474F', linewidth=0.7, alpha=0.9)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(short, fontsize=10, rotation=45, ha='right')
+        ax.set_title(group_name, fontsize=14, fontweight='bold')
+        ax.set_ylabel('RMSE', fontsize=12)
+        ax.grid(axis='y', alpha=0.3)
+        ax.legend(fontsize=9, loc='upper left')
+
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / 'support_revin_check.png', dpi=DPI,
+                bbox_inches='tight', facecolor='white')
+    plt.close()
+    print("  Support: RevIN fairness check saved")
 
 
 def support_interpretability_3panel():
@@ -801,28 +875,32 @@ def copy_architecture():
 # ====================================================================
 if __name__ == '__main__':
     print("=" * 60)
-    print("Generating Slides Figures (4 experiments + supporting)")
+    print("Generating Slides Figures (6 experiments + supporting)")
     print("=" * 60)
 
     print("\nLoading data...")
     cb = load_cross_backbone()
     abl = load_ablation()
+    stat = load_stat_comparison()
     sota = load_json('sota_baselines/sota_baselines_results.json')
     bench = load_json('benchmark/benchmark_baselines_results.json')
     sens = load_json('sensitivity/sensitivity_results.json')
 
     print("\n--- Experiment figures ---")
-    exp1_overall(cb)              # Exp 1: 4 backbone × 3 metrics
-    exp2_vs_ml(bench)             # Exp 2: vs ML baselines (summary)
-    exp2_vs_ml_detail(bench)      # Exp 2: per-dataset heatmap
-    exp3_vs_dl(sota)              # Exp 3: vs DL baselines (summary)
-    exp3_vs_dl_detail(sota)       # Exp 3: per-dataset heatmap
-    exp4_backtest()               # Exp 4: Sharpe + Cumulative Return
+    exp1_overall(cb)              # Exp 1: 泛化性與穩健性驗證 (4 backbone × 3 metrics)
+    exp2_vs_stat(stat)            # Exp 2: 與統計模型比較 (summary)
+    exp2_vs_stat_detail(stat)     # Exp 2: 與統計模型比較 (per-dataset)
+    exp3_vs_ml(bench)             # Exp 3: 與機器學習基線比較 (summary)
+    exp3_vs_ml_detail(bench)      # Exp 3: 與機器學習基線比較 (per-dataset)
+    exp4_vs_dl(sota)              # Exp 4: 與 SOTA 深度學習模型比較 (summary)
+    exp4_vs_dl_detail(sota)       # Exp 4: 與 SOTA 深度學習模型比較 (per-dataset)
+    exp5_backtest()               # Exp 5: 回測實驗 (Sharpe + Cumulative Return)
+    exp6_ablation(abl)            # Exp 6: 消融與敏感度分析 (ablation)
+    exp6_sensitivity(sens)        # Exp 6: 消融與敏感度分析 (sensitivity)
 
     print("\n--- Supporting figures ---")
-    support_ablation(abl)
-    support_sensitivity(sens)
     support_compute_cost()
+    support_revin_check()
     support_interpretability_3panel()
 
     print(f"\n{'=' * 60}")
