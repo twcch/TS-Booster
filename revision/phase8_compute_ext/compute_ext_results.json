@@ -1,0 +1,76 @@
+{
+  "linear": {
+    "vanilla": {
+      "params": 366,
+      "flops": 366,
+      "latency_ms": 0.23428475990840525,
+      "peak_mem_mb": 9.18505859375
+    },
+    "tsb": {
+      "params": 7156,
+      "flops": 43692,
+      "latency_ms": 1.3500705899514287,
+      "peak_mem_mb": 9.435546875
+    }
+  },
+  "lstm": {
+    "vanilla": {
+      "params": 50883,
+      "flops": 1520835,
+      "latency_ms": 0.362788425072722,
+      "peak_mem_mb": 14.16845703125
+    },
+    "tsb": {
+      "params": 57673,
+      "flops": 1564161,
+      "latency_ms": 1.3792710300094768,
+      "peak_mem_mb": 14.16845703125
+    }
+  },
+  "gru": {
+    "vanilla": {
+      "params": 38211,
+      "flops": 1140675,
+      "latency_ms": 0.3916517600282532,
+      "peak_mem_mb": 13.00146484375
+    },
+    "tsb": {
+      "params": 45001,
+      "flops": 1184001,
+      "latency_ms": 1.4521674600564438,
+      "peak_mem_mb": 13.00146484375
+    }
+  },
+  "transformer": {
+    "vanilla": {
+      "params": 67331,
+      "flops": 34051,
+      "latency_ms": 0.7789026450609526,
+      "peak_mem_mb": 11.830078125
+    },
+    "tsb": {
+      "params": 74121,
+      "flops": 77377,
+      "latency_ms": 1.9784722700296697,
+      "peak_mem_mb": 11.830078125
+    }
+  },
+  "DLinear": {
+    "params": 372,
+    "flops": 372,
+    "latency_ms": 0.20165742486824456,
+    "peak_mem_mb": 9.77734375
+  },
+  "PatchTST": {
+    "params": 402823,
+    "flops": 407046,
+    "latency_ms": 1.2753176550359058,
+    "peak_mem_mb": 12.4287109375
+  },
+  "iTransformer": {
+    "params": 269571,
+    "flops": 137219,
+    "latency_ms": 0.3991260950351716,
+    "peak_mem_mb": 12.54345703125
+  }
+}
