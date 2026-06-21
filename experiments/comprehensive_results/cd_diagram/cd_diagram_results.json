@@ -1,20 +1,26 @@
 {
-  "exp4_sota": {
+  "exp2_stat": {
     "methods": [
-      "DLinear",
-      "PatchTST",
-      "iTransformer",
+      "Persistence",
+      "EWMA",
+      "HAR-RV",
+      "GARCH",
+      "GJR-GARCH",
+      "ARIMA",
       "TS-Booster + Linear"
     ],
     "avg_ranks": [
-      2.3125,
-      3.5625,
-      2.875,
-      1.25
+      3.84375,
+      5.3125,
+      2.1875,
+      6.375,
+      6.3125,
+      2.78125,
+      1.1875
     ],
-    "friedman_chi2": 27.525,
-    "friedman_p": 4.569011798682965e-06,
-    "nemenyi_cd": 1.172582708525643,
+    "friedman_chi2": 87.140625,
+    "friedman_p": 1.1102230246251565e-16,
+    "nemenyi_cd": 2.2523359540707952,
     "n_datasets": 16
   }
 }
