@@ -42,6 +42,9 @@ ALL_DATASETS = [
     "0050_TW", "2317_TW", "2330_TW", "2454_TW", "2603_TW", "2881_TW",
 ]
 
+# Display-only renames (data keys in results JSON stay unchanged)
+DISPLAY_NAMES = {"Persistence": "Naïve"}
+
 
 def load_stat_data():
     """Merge Phase-3 integration per_dataset (Persistence/EWMA/HAR-RV/GARCH/
@@ -425,7 +428,8 @@ def run_group(group_name, results_data, group_config):
 
     # Draw CD diagram
     filename = f"cd_diagram_{group_name}.png"
-    draw_cd_diagram(avg_ranks, methods, cd, n_datasets, title, filename)
+    display_methods = [DISPLAY_NAMES.get(m, m) for m in methods]
+    draw_cd_diagram(avg_ranks, display_methods, cd, n_datasets, title, filename)
 
     # LaTeX-ready summary
     print(f"\n  LaTeX (avg rank row for existing table):")

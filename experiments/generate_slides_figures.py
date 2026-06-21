@@ -47,6 +47,13 @@ METRIC_NAMES = ['RMSE', 'MAE', 'MDA']
 CMAP_IMPROVE = mcolors.LinearSegmentedColormap.from_list(
     'improve', ['#E53935', '#FFCDD2', '#FFFFFF', '#C8E6C9', '#2E7D32'], N=256)
 
+# Display-only renames (data keys in results JSON stay unchanged)
+DISPLAY_NAMES = {'Persistence': 'Naïve'}
+
+
+def _display(name):
+    return DISPLAY_NAMES.get(name, name)
+
 plt.rcParams.update({
     'font.family': 'DejaVu Sans',
     'axes.spines.top': False,
@@ -278,7 +285,7 @@ def _exp_vs_baselines(results, tsb_method, competitors, comp_colors,
 
         ax.axhline(y=0, color='#9E9E9E', linewidth=1, linestyle='--')
         ax.set_xticks(x)
-        ax.set_xticklabels(competitors, fontsize=12, fontweight='bold')
+        ax.set_xticklabels([_display(c) for c in competitors], fontsize=12, fontweight='bold')
         ax.set_title(ml, fontsize=14, fontweight='bold', pad=12)
         ax.grid(axis='y', alpha=0.3)
         # Add top padding so labels don't collide with title
@@ -367,7 +374,7 @@ def _exp_per_dataset_lollipop(results, tsb_method, competitors, title, filename)
             ax.plot([0, imp], [i, i], color=color, linewidth=2.2, alpha=0.85, zorder=3)
             ax.scatter([imp], [i], color=color, s=100, zorder=5,
                        edgecolors='white', linewidths=1.0)
-            best_name = all_best_comp[ds]
+            best_name = _display(all_best_comp[ds])
             if imp >= 0:
                 ax.text(imp + 1.0, i, f'+{imp:.1f}% vs {best_name}',
                         va='center', ha='left', fontsize=10, color=color, fontweight='bold')
