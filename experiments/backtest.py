@@ -274,13 +274,16 @@ def run_inv_vol_strategy(pred_vol, returns, target_vol=TARGET_VOL):
         target_vol: target annualized vol (%)
 
     Returns:
-        strategy_returns: [n_test] daily strategy log returns
+        strategy_returns: [n_test] daily strategy simple returns
     """
     # Ensure positive vol predictions (clip small/negative values)
     pred_vol = np.clip(pred_vol, 0.1, None)
 
     weight = np.clip(target_vol / pred_vol, WEIGHT_FLOOR, WEIGHT_CAP)
-    strategy_returns = weight * returns
+    # Convert log returns to simple returns before scaling by the position
+    # weight: w * (e^r - 1) is the actual P&L of holding weight w for one day,
+    # and is the quantity that compounds as prod(1 + r_s) in NAV/drawdown.
+    strategy_returns = weight * np.expm1(returns)
     return strategy_returns
 
 

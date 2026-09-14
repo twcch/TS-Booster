@@ -1,0 +1,546 @@
+{
+  "USD_TWD": {
+    "Historical Vol": {
+      "sharpe_old": 0.40572656294970205,
+      "sharpe_new": 0.4335656965398423,
+      "cum_return_old": 0.28835890733859526,
+      "cum_return_new": 0.3150270113031408
+    },
+    "XGBoost": {
+      "sharpe_old": 0.3761075647158069,
+      "sharpe_new": 0.4051287057794687,
+      "cum_return_old": 0.26432024234565876,
+      "cum_return_new": 0.29219021237669773
+    },
+    "LightGBM": {
+      "sharpe_old": 0.39031180967022433,
+      "sharpe_new": 0.41923930362022205,
+      "cum_return_old": 0.2777762963062167,
+      "cum_return_new": 0.3057773309336489
+    },
+    "Linear": {
+      "sharpe_old": 0.3607003668608199,
+      "sharpe_new": 0.3885979438842272,
+      "cum_return_old": 0.24848353975939386,
+      "cum_return_new": 0.2748624971885081
+    },
+    "Linear+TSB": {
+      "sharpe_old": 0.41470384465391724,
+      "sharpe_new": 0.4421448799801229,
+      "cum_return_old": 0.2945337823435419,
+      "cum_return_new": 0.3207851076053727
+    },
+    "tsb_minus_linear_sharpe_new": 0.053546936095895725,
+    "tsb_vs_linear_nav_lift_new": 0.03602161842405671
+  },
+  "EUR_TWD": {
+    "Historical Vol": {
+      "sharpe_old": 0.1164614351312261,
+      "sharpe_new": 0.1503828440046364,
+      "cum_return_old": 0.032494615505461955,
+      "cum_return_new": 0.06272025322276553
+    },
+    "XGBoost": {
+      "sharpe_old": 0.14516782926754515,
+      "sharpe_new": 0.17962618972865452,
+      "cum_return_old": 0.057818223121488765,
+      "cum_return_new": 0.0895156530704535
+    },
+    "LightGBM": {
+      "sharpe_old": 0.13552643477459722,
+      "sharpe_new": 0.16983308419491347,
+      "cum_return_old": 0.04920018604345655,
+      "cum_return_new": 0.08042181033754559
+    },
+    "Linear": {
+      "sharpe_old": 0.12337989568547332,
+      "sharpe_new": 0.15760899653966057,
+      "cum_return_old": 0.03855727841886991,
+      "cum_return_new": 0.06918942352070001
+    },
+    "Linear+TSB": {
+      "sharpe_old": 0.2137898168567987,
+      "sharpe_new": 0.24797020715463658,
+      "cum_return_old": 0.12151057845137214,
+      "cum_return_new": 0.1545133316697893
+    },
+    "tsb_minus_linear_sharpe_new": 0.09036121061497601,
+    "tsb_vs_linear_nav_lift_new": 0.07980242440869723
+  },
+  "JPY_TWD": {
+    "Historical Vol": {
+      "sharpe_old": -0.6414565721444815,
+      "sharpe_new": -0.5980435479531763,
+      "cum_return_old": -0.5026274427339146,
+      "cum_return_new": -0.481736573872098
+    },
+    "XGBoost": {
+      "sharpe_old": -0.6688040355745776,
+      "sharpe_new": -0.6252747583236061,
+      "cum_return_old": -0.5052683768290847,
+      "cum_return_new": -0.4849568404890988
+    },
+    "LightGBM": {
+      "sharpe_old": -0.6727689372342218,
+      "sharpe_new": -0.6292334850925145,
+      "cum_return_old": -0.5089153686645348,
+      "cum_return_new": -0.48862165627020526
+    },
+    "Linear": {
+      "sharpe_old": -0.6480867317800496,
+      "sharpe_new": -0.6044914251780417,
+      "cum_return_old": -0.49695502742365016,
+      "cum_return_new": -0.476069377421366
+    },
+    "Linear+TSB": {
+      "sharpe_old": -0.6402034938691958,
+      "sharpe_new": -0.5968639687506819,
+      "cum_return_old": -0.49188292496685604,
+      "cum_return_new": -0.4711042704643522
+    },
+    "tsb_minus_linear_sharpe_new": 0.007627456427359736,
+    "tsb_vs_linear_nav_lift_new": 0.009476649661317671
+  },
+  "CNY_TWD": {
+    "Historical Vol": {
+      "sharpe_old": 0.2778078751500736,
+      "sharpe_new": 0.3053094694831986,
+      "cum_return_old": 0.154146398724182,
+      "cum_return_new": 0.17574616946281818
+    },
+    "XGBoost": {
+      "sharpe_old": 0.28261917944573933,
+      "sharpe_new": 0.31081905431282747,
+      "cum_return_old": 0.15912572800786307,
+      "cum_return_new": 0.18161405704517386
+    },
+    "LightGBM": {
+      "sharpe_old": 0.25139667891082246,
+      "sharpe_new": 0.28040762415177817,
+      "cum_return_old": 0.13699986931912345,
+      "cum_return_new": 0.16041835992506503
+    },
+    "Linear": {
+      "sharpe_old": 0.27733565194429777,
+      "sharpe_new": 0.3049807715496251,
+      "cum_return_old": 0.15466236431451463,
+      "cum_return_new": 0.17655867174547613
+    },
+    "Linear+TSB": {
+      "sharpe_old": 0.2877822566874303,
+      "sharpe_new": 0.3152401463500619,
+      "cum_return_old": 0.16283535621209588,
+      "cum_return_new": 0.18470053785856422
+    },
+    "tsb_minus_linear_sharpe_new": 0.010259374800436816,
+    "tsb_vs_linear_nav_lift_new": 0.0069200680838203965
+  },
+  "THB_TWD": {
+    "Historical Vol": {
+      "sharpe_old": 0.09287873791116937,
+      "sharpe_new": 0.12661553224604075,
+      "cum_return_old": 0.009132257522148413,
+      "cum_return_new": 0.039915324701905064
+    },
+    "XGBoost": {
+      "sharpe_old": 0.12395112768892359,
+      "sharpe_new": 0.15775641241761976,
+      "cum_return_old": 0.037432821609994615,
+      "cum_return_new": 0.06914198563359997
+    },
+    "LightGBM": {
+      "sharpe_old": 0.09886995800667796,
+      "sharpe_new": 0.13280459559738386,
+      "cum_return_old": 0.014099930933617388,
+      "cum_return_new": 0.0454489093180197
+    },
+    "Linear": {
+      "sharpe_old": 0.12724316123868598,
+      "sharpe_new": 0.16131576386172067,
+      "cum_return_old": 0.04000372098846383,
+      "cum_return_new": 0.07244416567711243
+    },
+    "Linear+TSB": {
+      "sharpe_old": 0.14837410928866876,
+      "sharpe_new": 0.18196924862311684,
+      "cum_return_old": 0.06032657243455253,
+      "cum_return_new": 0.09236214787791175
+    },
+    "tsb_minus_linear_sharpe_new": 0.020653484761396168,
+    "tsb_vs_linear_nav_lift_new": 0.018572512060078816
+  },
+  "KRW_TWD": {
+    "Historical Vol": {
+      "sharpe_old": -0.5847423339165359,
+      "sharpe_new": -0.5494886939855694,
+      "cum_return_old": -0.44585896177523665,
+      "cum_return_new": -0.4281934120929095
+    },
+    "XGBoost": {
+      "sharpe_old": -0.5487908121915226,
+      "sharpe_new": -0.5135145923307612,
+      "cum_return_old": -0.43150586652859646,
+      "cum_return_new": -0.4132591652045663
+    },
+    "LightGBM": {
+      "sharpe_old": -0.5477469796601464,
+      "sharpe_new": -0.5123287355086514,
+      "cum_return_old": -0.4329326423774945,
+      "cum_return_new": -0.4145545171572246
+    },
+    "Linear": {
+      "sharpe_old": -0.5965449626978172,
+      "sharpe_new": -0.561132315663613,
+      "cum_return_old": -0.447758893226616,
+      "cum_return_new": -0.4302946593697219
+    },
+    "Linear+TSB": {
+      "sharpe_old": -0.5270676415619059,
+      "sharpe_new": -0.4917718949121762,
+      "cum_return_old": -0.4184088611578115,
+      "cum_return_new": -0.39989851437335067
+    },
+    "tsb_minus_linear_sharpe_new": 0.06936042075143678,
+    "tsb_vs_linear_nav_lift_new": 0.05335415139823563
+  },
+  "CAD_TWD": {
+    "Historical Vol": {
+      "sharpe_old": 0.11214513131899816,
+      "sharpe_new": 0.14432238598775934,
+      "cum_return_old": 0.02710649185138503,
+      "cum_return_new": 0.05636700730290145
+    },
+    "XGBoost": {
+      "sharpe_old": 0.1026897648134996,
+      "sharpe_new": 0.1352235382369323,
+      "cum_return_old": 0.018635431026743365,
+      "cum_return_new": 0.04803177715745077
+    },
+    "LightGBM": {
+      "sharpe_old": 0.10500273789141099,
+      "sharpe_new": 0.13743978685802313,
+      "cum_return_old": 0.02089018319808389,
+      "cum_return_new": 0.050157686051487405
+    },
+    "Linear": {
+      "sharpe_old": 0.13779216892755572,
+      "sharpe_new": 0.17023398566138948,
+      "cum_return_old": 0.050303642058296294,
+      "cum_return_new": 0.08039162556900381
+    },
+    "Linear+TSB": {
+      "sharpe_old": 0.1187872931905223,
+      "sharpe_new": 0.15100433283254922,
+      "cum_return_old": 0.03308751369054885,
+      "cum_return_new": 0.06252442843773687
+    },
+    "tsb_minus_linear_sharpe_new": -0.01922965282884026,
+    "tsb_vs_linear_nav_lift_new": -0.016537704206895265
+  },
+  "EUR_USD": {
+    "Historical Vol": {
+      "sharpe_old": -0.21645354172498477,
+      "sharpe_new": -0.18107602116915208,
+      "cum_return_old": -0.22695704911106107,
+      "cum_return_new": -0.20285782017494491
+    },
+    "XGBoost": {
+      "sharpe_old": -0.1496904563262421,
+      "sharpe_new": -0.11424162488584931,
+      "cum_return_old": -0.1798743362337769,
+      "cum_return_new": -0.15440030896499102
+    },
+    "LightGBM": {
+      "sharpe_old": -0.1634990826903347,
+      "sharpe_new": -0.12805766743020805,
+      "cum_return_old": -0.1906230162996333,
+      "cum_return_new": -0.1653653109785851
+    },
+    "Linear": {
+      "sharpe_old": -0.20174739783014894,
+      "sharpe_new": -0.16623064465112378,
+      "cum_return_old": -0.2145979783955203,
+      "cum_return_new": -0.19026169124421577
+    },
+    "Linear+TSB": {
+      "sharpe_old": -0.0995485787862215,
+      "sharpe_new": -0.0640203049662583,
+      "cum_return_old": -0.1455417104097857,
+      "cum_return_new": -0.11866492405166051
+    },
+    "tsb_minus_linear_sharpe_new": 0.10221033968486548,
+    "tsb_vs_linear_nav_lift_new": 0.08841963683621246
+  },
+  "GBP_USD": {
+    "Historical Vol": {
+      "sharpe_old": -0.12880642699496667,
+      "sharpe_new": -0.09040620554174697,
+      "cum_return_old": -0.1765190893126567,
+      "cum_return_new": -0.1470292008001436
+    },
+    "XGBoost": {
+      "sharpe_old": -0.1252533166646543,
+      "sharpe_new": -0.08597313548285537,
+      "cum_return_old": -0.16263590714595177,
+      "cum_return_new": -0.13356544148382443
+    },
+    "LightGBM": {
+      "sharpe_old": -0.13596868020526737,
+      "sharpe_new": -0.09725971912658392,
+      "cum_return_old": -0.17621881901513026,
+      "cum_return_new": -0.14724080684067564
+    },
+    "Linear": {
+      "sharpe_old": -0.17379656454245293,
+      "sharpe_new": -0.13506793113271906,
+      "cum_return_old": -0.20537011815718587,
+      "cum_return_new": -0.1770960793797216
+    },
+    "Linear+TSB": {
+      "sharpe_old": -0.12079197854849405,
+      "sharpe_new": -0.08214335076805443,
+      "cum_return_old": -0.17569026467554105,
+      "cum_return_new": -0.1452526451966314
+    },
+    "tsb_minus_linear_sharpe_new": 0.05292458036466463,
+    "tsb_vs_linear_nav_lift_new": 0.03869641811778912
+  },
+  "USD_JPY": {
+    "Historical Vol": {
+      "sharpe_old": 1.0838740405364347,
+      "sharpe_new": 1.1291918443334785,
+      "cum_return_old": 1.5903324318794576,
+      "cum_return_new": 1.7034373617984722
+    },
+    "XGBoost": {
+      "sharpe_old": 1.0905337898009333,
+      "sharpe_new": 1.1357497159919343,
+      "cum_return_old": 1.5846667955301874,
+      "cum_return_new": 1.6964326365659068
+    },
+    "LightGBM": {
+      "sharpe_old": 1.094231907827688,
+      "sharpe_new": 1.1395019588355513,
+      "cum_return_old": 1.5977130873900123,
+      "cum_return_new": 1.7103668746428955
+    },
+    "Linear": {
+      "sharpe_old": 1.0978357165652943,
+      "sharpe_new": 1.1433722191866684,
+      "cum_return_old": 1.5988382628869218,
+      "cum_return_new": 1.711462268371958
+    },
+    "Linear+TSB": {
+      "sharpe_old": 1.1206983435763447,
+      "sharpe_new": 1.1657828977831661,
+      "cum_return_old": 1.666845391215178,
+      "cum_return_new": 1.7823106323912028
+    },
+    "tsb_minus_linear_sharpe_new": 0.022410678596497702,
+    "tsb_vs_linear_nav_lift_new": 0.02612920889427839
+  },
+  "0050_TW": {
+    "Historical Vol": {
+      "sharpe_old": 1.509493968787472,
+      "sharpe_new": 1.6067675822736187,
+      "cum_return_old": 1.511756652028879,
+      "cum_return_new": 1.6778294530729854
+    },
+    "XGBoost": {
+      "sharpe_old": 1.531880221507492,
+      "sharpe_new": 1.6326387499906185,
+      "cum_return_old": 1.471932200320344,
+      "cum_return_new": 1.635031938045799
+    },
+    "LightGBM": {
+      "sharpe_old": 1.4765311224864257,
+      "sharpe_new": 1.5793586975450906,
+      "cum_return_old": 1.3254129814751705,
+      "cum_return_new": 1.4749330828604847
+    },
+    "Linear": {
+      "sharpe_old": 1.49984159963626,
+      "sharpe_new": 1.6009345595260098,
+      "cum_return_old": 1.6239123960534783,
+      "cum_return_new": 1.8122635497119237
+    },
+    "Linear+TSB": {
+      "sharpe_old": 1.5973737583921082,
+      "sharpe_new": 1.6858192628542226,
+      "cum_return_old": 2.2039853745893048,
+      "cum_return_new": 2.4388274720764165
+    },
+    "tsb_minus_linear_sharpe_new": 0.08488470332821274,
+    "tsb_vs_linear_nav_lift_new": 0.22279701432274202
+  },
+  "2317_TW": {
+    "Historical Vol": {
+      "sharpe_old": 0.7986916684293717,
+      "sharpe_new": 0.9251029634093565,
+      "cum_return_old": 1.0256985878871534,
+      "cum_return_new": 1.3075485890348562
+    },
+    "XGBoost": {
+      "sharpe_old": 0.7894523368786,
+      "sharpe_new": 0.9199301702046547,
+      "cum_return_old": 0.9268518468539071,
+      "cum_return_new": 1.184166730352806
+    },
+    "LightGBM": {
+      "sharpe_old": 0.7779839104625051,
+      "sharpe_new": 0.9084793339266714,
+      "cum_return_old": 0.9141108307508621,
+      "cum_return_new": 1.1716148245730627
+    },
+    "Linear": {
+      "sharpe_old": 0.699663234573004,
+      "sharpe_new": 0.831909332637424,
+      "cum_return_old": 0.7714203187377306,
+      "cum_return_new": 1.0107026188236121
+    },
+    "Linear+TSB": {
+      "sharpe_old": 0.7173071528297124,
+      "sharpe_new": 0.8485906722357286,
+      "cum_return_old": 0.8019627086062946,
+      "cum_return_new": 1.0436510904777072
+    },
+    "tsb_minus_linear_sharpe_new": 0.016681339598304645,
+    "tsb_vs_linear_nav_lift_new": 0.016386546347352038
+  },
+  "2330_TW": {
+    "Historical Vol": {
+      "sharpe_old": 1.1071815063260044,
+      "sharpe_new": 1.233081532630566,
+      "cum_return_old": 1.7642469368540281,
+      "cum_return_new": 2.1504709554804653
+    },
+    "XGBoost": {
+      "sharpe_old": 0.9598942045470801,
+      "sharpe_new": 1.0896380671578227,
+      "cum_return_old": 1.285923760932421,
+      "cum_return_new": 1.5948788254499302
+    },
+    "LightGBM": {
+      "sharpe_old": 0.979546534336535,
+      "sharpe_new": 1.1094334200980611,
+      "cum_return_old": 1.3329385622741268,
+      "cum_return_new": 1.6494888094539184
+    },
+    "Linear": {
+      "sharpe_old": 1.0292030616618943,
+      "sharpe_new": 1.1599563207040884,
+      "cum_return_old": 1.3968852207310154,
+      "cum_return_new": 1.716728352614643
+    },
+    "Linear+TSB": {
+      "sharpe_old": 0.9496155540980074,
+      "sharpe_new": 1.079890722034275,
+      "cum_return_old": 1.239420990149282,
+      "cum_return_new": 1.5385816093461036
+    },
+    "tsb_minus_linear_sharpe_new": -0.08006559866981333,
+    "tsb_vs_linear_nav_lift_new": -0.06557399936474584
+  },
+  "2454_TW": {
+    "Historical Vol": {
+      "sharpe_old": 0.7552633795923991,
+      "sharpe_new": 0.9222372543926198,
+      "cum_return_old": 0.8628088641620968,
+      "cum_return_new": 1.1876325243307648
+    },
+    "XGBoost": {
+      "sharpe_old": 0.6850596610082641,
+      "sharpe_new": 0.8583451464697854,
+      "cum_return_old": 0.6899474049900862,
+      "cum_return_new": 0.9744165604263741
+    },
+    "LightGBM": {
+      "sharpe_old": 0.7331214599634204,
+      "sharpe_new": 0.906756550183251,
+      "cum_return_old": 0.7581681863787861,
+      "cum_return_new": 1.0536140696827454
+    },
+    "Linear": {
+      "sharpe_old": 0.6605032623147404,
+      "sharpe_new": 0.8325119855987594,
+      "cum_return_old": 0.661165927223095,
+      "cum_return_new": 0.9407326884758229
+    },
+    "Linear+TSB": {
+      "sharpe_old": 0.6794864350022675,
+      "sharpe_new": 0.8530965231641492,
+      "cum_return_old": 0.6730493410409506,
+      "cum_return_new": 0.9517177404950667
+    },
+    "tsb_minus_linear_sharpe_new": 0.020584537565389804,
+    "tsb_vs_linear_nav_lift_new": 0.005660260212276391
+  },
+  "2603_TW": {
+    "Historical Vol": {
+      "sharpe_old": 0.32345421421263587,
+      "sharpe_new": 0.5225976736107872,
+      "cum_return_old": 0.19870097053335134,
+      "cum_return_new": 0.6616799536520888
+    },
+    "XGBoost": {
+      "sharpe_old": 0.6202957618045223,
+      "sharpe_new": 0.8556565463410084,
+      "cum_return_old": 0.7993245175361745,
+      "cum_return_new": 1.3418504058404515
+    },
+    "LightGBM": {
+      "sharpe_old": 0.6799639990906493,
+      "sharpe_new": 0.9166532058455604,
+      "cum_return_old": 0.909437126283851,
+      "cum_return_new": 1.4729423239152597
+    },
+    "Linear": {
+      "sharpe_old": 0.31072137262744426,
+      "sharpe_new": 0.5113870435691152,
+      "cum_return_old": 0.17440144572352323,
+      "cum_return_new": 0.6210516135424693
+    },
+    "Linear+TSB": {
+      "sharpe_old": 0.573093891282876,
+      "sharpe_new": 0.802400301452236,
+      "cum_return_old": 0.7248210085045541,
+      "cum_return_new": 1.2558170603937802
+    },
+    "tsb_minus_linear_sharpe_new": 0.2910132578831207,
+    "tsb_vs_linear_nav_lift_new": 0.3915763332570046
+  },
+  "2881_TW": {
+    "Historical Vol": {
+      "sharpe_old": 1.3737878214410475,
+      "sharpe_new": 1.4719691840046913,
+      "cum_return_old": 2.178548326654458,
+      "cum_return_new": 2.4854614655193785
+    },
+    "XGBoost": {
+      "sharpe_old": 1.2284911495699171,
+      "sharpe_new": 1.3308606232830746,
+      "cum_return_old": 1.6691740846144691,
+      "cum_return_new": 1.9217995136474433
+    },
+    "LightGBM": {
+      "sharpe_old": 1.2200520018246606,
+      "sharpe_new": 1.3225515930413387,
+      "cum_return_old": 1.6646983051727804,
+      "cum_return_new": 1.918467076310686
+    },
+    "Linear": {
+      "sharpe_old": 1.2288870856284204,
+      "sharpe_new": 1.3309429513770896,
+      "cum_return_old": 1.7113975374264525,
+      "cum_return_new": 1.9716655226561088
+    },
+    "Linear+TSB": {
+      "sharpe_old": 1.201417706596483,
+      "sharpe_new": 1.303811977475727,
+      "cum_return_old": 1.6093587161782956,
+      "cum_return_new": 1.8555650877699272
+    },
+    "tsb_minus_linear_sharpe_new": -0.027130973901362543,
+    "tsb_vs_linear_nav_lift_new": -0.03906914624173774
+  }
+}

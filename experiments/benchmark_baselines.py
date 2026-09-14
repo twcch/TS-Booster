@@ -244,8 +244,10 @@ def run_arima(data):
     for i in range(n_windows):
         targets[i] = test_vol[i : i + HORIZON]
 
-    # Last observation for MDA (raw scale)
-    last_obs = np.array([test_vol[i] for i in range(n_windows)]) if n_windows > 0 else None
+    # Last observation for MDA (raw scale): for window i the forecasts target
+    # test_vol[i : i+HORIZON], so the last known value is vol[train_val_end + i - 1]
+    # (test_vol[i] itself is the h=1 target and must not be used as the anchor).
+    last_obs = np.array([vol[train_val_end + i - 1] for i in range(n_windows)]) if n_windows > 0 else None
 
     # ARIMA works on raw scale
     return compute_metrics_raw(preds, targets, last_obs)
