@@ -1,0 +1,7 @@
+# torch 2.6.0 is the first release with Python 3.13 wheels on every platform
+# (Linux, macOS arm64, Windows) and with torch.compile support on 3.13.
+# Linux + CUDA: the extra index resolves to the CUDA 12.4 build (2.6.0+cu124).
+# macOS / CPU: pip falls back to the regular PyPI wheel (CPU / MPS).
+--extra-index-url https://download.pytorch.org/whl/cu124
+
+torch==2.6.0

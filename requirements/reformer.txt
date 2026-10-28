@@ -1,0 +1,2 @@
+local-attention==1.11.2
+reformer-pytorch==1.4.4

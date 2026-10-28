@@ -1,0 +1,2 @@
+# Optional .ts classification reader (local CSV forecasting does not need it).
+sktime==0.40.1

@@ -1,0 +1,5 @@
+# Dependencies are split by purpose under requirements/ (see README.md):
+#   core.txt  local CSV training      dev.txt  tests (pytest)
+#   tools.txt data download, statistics and Excel reports
+#   uea.txt, reformer.txt, foundation-*.txt  optional model/data providers
+-r requirements/core.txt
