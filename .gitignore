@@ -180,7 +180,7 @@ docs/*
 /batch_runs/
 /check_output/
 
-docs/
+.DS_Store
 benchmark_results/
 run_batch_long_term_forecast.py
 run_batch_long_term_forecast_01.py
