@@ -181,6 +181,7 @@ docs/*
 /check_output/
 
 docs/
+benchmark_results/
 run_batch_long_term_forecast.py
 run_batch_long_term_forecast_01.py
 run_batch_long_term_forecast_02.py
