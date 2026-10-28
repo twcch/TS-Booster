@@ -8,5 +8,5 @@ jaxtyping==0.3.4
 orjson==3.11.5
 tensorboard==2.20.0
 python-dotenv==1.0.0
-datasets==4.5.0
+datasets==5.0.1
 huggingface_hub==0.36.0
